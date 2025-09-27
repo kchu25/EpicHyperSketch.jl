@@ -1,0 +1,13 @@
+name = "EpicHyperSketch"
+uuid = "c73a71ba-f77a-4450-b81e-a1166e41307d"
+authors = ["Shane Kuei-Hsien Chu (skchu@wustl.edu)"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.11.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
