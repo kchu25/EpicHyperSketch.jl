@@ -93,15 +93,15 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, num_counters, n
             for elem_idx in axes(combs, 1)
                 # get the filter number and times the hash coefficient
                 comb_index_value = combs[elem_idx, i]
-                filter_index = refArray[comb_index_value, 2, n]
+                filter_index = refArray[comb_index_value, 1, n]
                 hash_coeff = hashCoefficients[j, 2*(elem_idx-1)+1]
                 sketch_col_index += filter_index * hash_coeff
 
                 if elem_idx < size(combs, 1)
                     # compute the distance between the occurrence of two filters
                     next_comb_index_value = combs[elem_idx+1, i]
-                    position1 = refArray[comb_index_value,1,n]
-                    position2 = refArray[next_comb_index_value,1,n]
+                    position1 = refArray[comb_index_value,2,n]
+                    position2 = refArray[next_comb_index_value,2,n]
                     # take into account of the length of each filter
                     _distance_ = position2 - position1 - filter_len
                     if _distance_ < 0
