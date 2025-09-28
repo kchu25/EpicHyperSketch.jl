@@ -87,7 +87,7 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, num_counters, n
             end
         end
         sketch_col_index::Int32 = 0
-        if valid
+        @inbounds if valid
             # Perform counting operation
             for elem_idx in axes(combs, 1)
                 # get the filter number and times the hash coefficient
