@@ -45,6 +45,9 @@ mutable struct record
         vecRefArray = constructVecRefArrays(activation_dict, max_active_len; 
             batch_size=batch_size, case=case, use_cuda=use_cuda)
         cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda)
+
+
+
     end
 end
 
@@ -63,11 +66,6 @@ function batch_count_and_last_size(dict::Dict{T, Vector{S}}, batch_size::Integer
     return num_batches, last_batch_size
 end
 
-
-const refArraysSecondDim = Dict(
-    :OrdinaryFeatures => 1,
-    :Convolution => 2
-)
 
 """
     constructVecRefArrays(activation_dict, max_active_len; batch_size, case, use_cuda)
@@ -112,17 +110,9 @@ function constructVecRefArrays(
     return vecRefArray
 end
 
-
 """
-for :Convolution case, need to test the non-zero portion of 
-    vecRefArray[i][:, POSITION_COLUMN, n] is sorted in ascending order for all i, n
-        i is the batch index, 
-        n is the within-batch index
+    generate_combinations(motif_size, max_active_len; use_cuda=true)
 """
-# TODO
-
-
-
 function generate_combinations(motif_size::Integer, max_active_len::Integer; use_cuda=true)
     # Generate all combinations of motif_size from 1:max_active_len and store as IntType matrix
     comb_list = collect(combinations(1:max_active_len, motif_size))

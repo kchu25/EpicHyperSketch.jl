@@ -13,12 +13,18 @@ const DEFAULT_CMS_EPSILON = 0.00005
 # Default batch_size for refArray in vecRefArray
 const BATCH_SIZE = 500
 
-# Constants for refArray indexing (filters/features data)
+# Constants for refArray indexing (features/filters data)
 const FILTER_INDEX_COLUMN = 1  # Filter ID / Feature ID
 const POSITION_COLUMN = 2      # Position in sequence
 
-include("sketch.jl")
+# Number of columns (2nd dimension) in refArray based on case
+const refArraysSecondDim = Dict(
+    :OrdinaryFeatures => 1,
+    :Convolution => 2
+)
 
+include("sketch.jl")
+include("record.jl")
 
 
 
