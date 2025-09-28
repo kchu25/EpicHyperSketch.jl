@@ -124,7 +124,6 @@ function generate_combinations(motif_size::Integer, max_active_len::Integer; use
     return combs
 end
 
-
 """
     get_max_active_len(dict)
 Return the maximum length among all vectors in the dictionary.
