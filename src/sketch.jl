@@ -43,14 +43,22 @@ mutable struct CountMinSketch
         motif_size::Integer; 
         delta=DEFAULT_CMS_DELTA, 
         epsilon=DEFAULT_CMS_EPSILON, 
+        case::Symbol=:OrdinaryFeatures,
         use_cuda::Bool=true
     )
+        @assert motif_size > 0 "motif_size must be a positive integer"
+        @assert 0 < delta < 1 "delta must be in (0, 1)"
+        @assert 0 < epsilon < 1 "epsilon must be in (0, 1)"
+        @assert case in (:OrdinaryFeatures, :Convolution) "case must be :OrdinaryFeatures or :Convolution"
+
         rows = cms_rows(delta)
         num_counters = cms_num_counters(rows, epsilon)
         cols = cms_cols(num_counters, rows)
-
-        hash_coeffs = IntType.(rand(1:num_counters-1, (rows, motif_size)))
         sketch = zeros(IntType, rows, cols)
+
+        num_hash_cols = num_hash_columns(motif_size, case)
+        rand_matrix = rand(1:num_counters-1, (rows, num_hash_cols))
+        hash_coeffs = IntType.(rand_matrix)
 
         if use_cuda
             hash_coeffs = CuArray(hash_coeffs)
@@ -62,10 +70,14 @@ mutable struct CountMinSketch
 end
 
 """
-    config_size(num_features)
-Return the configuration size for a given number of features.
+    num_hash_columns(motif_size, case)
+Return the number of hash columns for the given motif size and case.
 """
-config_size(num_features::Integer) = 2 * num_features - 1
+function num_hash_columns(motif_size::Integer, case::Symbol)
+    case == :OrdinaryFeatures && return motif_size
+    case == :Convolution && return 2 * motif_size - 1
+    error("Unsupported case: $case")
+end
 
 import Base: show, getindex, size, iterate
 

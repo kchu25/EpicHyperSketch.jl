@@ -44,10 +44,11 @@ mutable struct record
         combs = generate_combinations(motif_size, max_active_len; use_cuda=use_cuda)
         vecRefArray = constructVecRefArrays(activation_dict, max_active_len; 
             batch_size=batch_size, case=case, use_cuda=use_cuda)
+        cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda)
     end
 end
 
-
+num_batches(r::record) = length(r.vecRefArray)
 
 ##### below are helper functions for record construction #####
 
@@ -132,8 +133,6 @@ function generate_combinations(motif_size::Integer, max_active_len::Integer; use
     end
     return combs
 end
-
-num_batches(r::record) = length(r.vecRefArray)
 
 
 """
