@@ -86,6 +86,7 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, num_counters, n
                 break
             end
         end
+        # determine which column in the sketch to increment
         sketch_col_index::Int32 = 0
         @inbounds if valid
             # Perform counting operation
@@ -118,4 +119,16 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, num_counters, n
     return nothing
 end
 
+"""
+Note:
 
+    hashCoefficients is a matrix where 
+        number of rows = number of hash functions = number of rows in sketch
+        number of columns is the "motifs_size"
+
+    comb is a matrix where 
+        number of rows = 
+            motif_size in the ordinary case
+            (motifs_size+1) ÷ 2 in the convolutional case
+        number of columns = number of combinations
+"""
