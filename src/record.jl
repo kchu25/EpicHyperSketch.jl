@@ -1,3 +1,5 @@
+
+
 """
     - vecRefArray::Vector{AbstractArray{IntType, 3}}
     Reference arrays on the selected features for each data point
@@ -28,21 +30,119 @@ mutable struct record
 
     function record(activation_dict::Dict{T, Vector{S}}, 
         motif_size::Integer,
-        batch_size=BATCH_SIZE
+        batch_size=BATCH_SIZE,
+        use_cuda::Bool=true
         ) where {T <: Integer, S}
-        
+
+        # preprocess the activation_dict
         filter_empty!(activation_dict)
+        sort_activation_dict!(activation_dict)
+        # determine case and max_active_length
         case = dict_case(activation_dict)
         max_active_len = get_max_active_len(activation_dict)
-
+        # generate combinations
+        combs = generate_combinations(motif_size, max_active_len; use_cuda=use_cuda)
+        vecRefArray = constructVecRefArrays(activation_dict, max_active_len; 
+            batch_size=batch_size, case=case, use_cuda=use_cuda)
     end
 end
 
-function constructRefArrays(; batch_size=BATCH_SIZE)
+
+
+##### below are helper functions for record construction #####
+
+"""
+    batch_count_and_last_size(dict, batch_size)
+Return the number of batches needed and the size of the last batch.
+"""
+function batch_count_and_last_size(dict::Dict{T, Vector{S}}, batch_size::Integer=BATCH_SIZE) where {T <: Integer, S}
+    total = length(dict)
+    num_batches = cld(total, batch_size)  # ceiling division
+    last_batch_size = total == 0 ? 0 : total % batch_size == 0 ? batch_size : total % batch_size
+    return num_batches, last_batch_size
 end
 
 
+const refArraysSecondDim = Dict(
+    :OrdinaryFeatures => 1,
+    :Convolution => 2
+)
+
+"""
+    constructVecRefArrays(activation_dict, max_active_len; batch_size, case, use_cuda)
+
+Constructs batched reference arrays for each data point, storing features or convolution info in a 3D array. 
+    Optionally moves arrays to GPU if `use_cuda` is true.
+"""
+function constructVecRefArrays(
+        activation_dict::Dict{T, Vector{S}},
+        max_active_len::Integer; 
+        batch_size=BATCH_SIZE,
+        case::Symbol=:OrdinaryFeatures,
+        use_cuda::Bool=true
+        ) where {T <: Integer, S}
+
+    num_batches, last_batch_size = batch_count_and_last_size(activation_dict, batch_size)
+
+    sizes = fill(batch_size, num_batches - 1)
+    last_batch_size > 0 && push!(sizes, last_batch_size)
+    vecRefArray = [zeros(IntType, (max_active_len, refArraysSecondDim[case], sz)) for sz in sizes]
+
+    for (index, data_pt_index) in enumerate(keys(activation_dict))
+        batch_index = div(index - 1, batch_size) + 1
+        within_batch_index = (index - 1) % batch_size + 1
+
+        features = activation_dict[data_pt_index]        
+        if case == :OrdinaryFeatures
+            vecRefArray[batch_index][1:length(features), 1, within_batch_index] .= convert.(IntType, features)
+        elseif case == :Convolution
+            for (i, feat) in enumerate(features)
+                vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.filter)
+                vecRefArray[batch_index][i, POSITION_COLUMN, within_batch_index] = convert(IntType, feat.position)
+            end
+        else
+            error("Unsupported case: $case")
+        end
+    end
+
+    if use_cuda
+        vecRefArray = CuArray.(vecRefArray)
+    end
+    return vecRefArray
+end
+
+
+"""
+for :Convolution case, need to test the non-zero portion of 
+    vecRefArray[i][:, POSITION_COLUMN, n] is sorted in ascending order for all i, n
+        i is the batch index, 
+        n is the within-batch index
+"""
+# TODO
+
+
+
+function generate_combinations(motif_size::Integer, max_active_len::Integer; use_cuda=true)
+    # Generate all combinations of motif_size from 1:max_active_len and store as IntType matrix
+    comb_list = collect(combinations(1:max_active_len, motif_size))
+    comb_matrix = reduce(hcat, comb_list)
+    combs = IntType.(comb_matrix)
+    if use_cuda
+        combs = CuArray(combs)
+    end
+    return combs
+end
+
 num_batches(r::record) = length(r.vecRefArray)
+
+
+"""
+    get_max_active_len(dict)
+Return the maximum length among all vectors in the dictionary.
+"""
+function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
+    maximum(length, values(dict))
+end
 
 const OrdinaryFeatureType = Int
 const ConvolutionFeatureType = NamedTuple{(:filter, :position), Tuple{Int, Int}}
@@ -58,17 +158,20 @@ function dict_case(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
 end
 
 """
+    sort_activation_dict!(activation_dict; case=:OrdinaryFeatures)
+Sorts each vector in the activation dictionary in-place. For :Convolution, sorts by position field.
+"""
+function sort_activation_dict!(activation_dict::Dict{T, Vector{S}}; case=:OrdinaryFeatures) where {T<:Integer, S}
+    sort_by = case == :OrdinaryFeatures ? identity : x -> x.position
+    for v in values(activation_dict)
+        sort!(v, by=sort_by)
+    end
+end
+
+"""
     filter_empty!(dict)
 Filter out keys with empty values from the dictionary.
 """
 function filter_empty!(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     filter!((k, v) -> !isempty(v), dict)
-end
-
-"""
-    get_max_active_len(dict)
-Return the maximum length among all vectors in the dictionary.
-"""
-function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
-    maximum(length, values(dict))
 end

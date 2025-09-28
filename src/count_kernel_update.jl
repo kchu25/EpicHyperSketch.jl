@@ -1,6 +1,4 @@
-# Constants for refArray indexing (filters/features data)
-const FILTER_INDEX_COLUMN = 1  # Filter ID / Feature ID
-const POSITION_COLUMN = 2      # Position in sequence
+
 
 """
 Check if all filters/features in a combination are present (non-zero) in refArray.
