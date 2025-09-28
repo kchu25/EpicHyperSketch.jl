@@ -106,7 +106,7 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, filter_len)
                     position2 = refArray[next_comb_index_value, 2, n]
                     # take into account of the length of each filter
                     _distance_ = position2 - position1 - filter_len
-                    if _distance_ < 0
+                    if _distance_ < 0 # overlapping filters, skip this combination
                         break
                     end
                     sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * _distance_
@@ -115,7 +115,7 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, filter_len)
             # get the column index; +1 to adjust to 1-base indexing
             sketch_col_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
             # counter increment
-            CUDA.@atomic sketch[j, sketch_col_index] += 1
+            CUDA.@atomic sketch[sketch_row_ind, sketch_col_index] += 1
         end
     end 
     return nothing
