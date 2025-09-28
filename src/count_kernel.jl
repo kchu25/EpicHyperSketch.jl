@@ -66,22 +66,24 @@ count-min sketch data structure for approximate frequency estimation.
                   n_counters, n_cols, filter_length)
 ```
 """
-function count_kernel(combs, refArray, hashCoefficients, sketch, num_counters, num_cols_sketch, filter_len)
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x;
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y;
+function count_kernel(combs, refArray, hashCoefficients, sketch, filter_len)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x;
+    sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y;
     n = (blockIdx().z - 1) * blockDim().z + threadIdx().z;
 
     # i: combination index
     # j: row index in the sketch
     # n: within_batch_index
-    I = size(combs, 2)
-    J = size(sketch, 1)
+    num_rows_combs, num_cols_combs = size(combs)
+    num_rows_sketch, num_cols_sketch = size(sketch)
+    num_counters = num_rows_sketch * num_cols_sketch
+
     N = size(refArray, 3)
-    if i ≤ I && j ≤ J && n ≤ N
+    if comb_col_ind ≤ num_cols_combs && sketch_row_ind ≤ num_rows_sketch && n ≤ N
         valid = true
         # ensure all elements in the refArray according to the given combination are valid (non-zero)
         @inbounds for elem_idx in axes(combs, 1)
-            if refArray[combs[elem_idx, i], 1, n] == 0
+            if refArray[combs[elem_idx, comb_col_ind], 1, n] == 0
                 valid = false
                 break
             end
@@ -90,24 +92,24 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, num_counters, n
         sketch_col_index::Int32 = 0
         @inbounds if valid
             # Perform counting operation
-            for elem_idx in axes(combs, 1)
+            for elem_idx in 1:num_rows_combs
                 # get the filter number and times the hash coefficient
-                comb_index_value = combs[elem_idx, i]
+                comb_index_value = combs[elem_idx, comb_col_ind]
                 filter_index = refArray[comb_index_value, 1, n]
-                hash_coeff = hashCoefficients[j, 2*(elem_idx-1)+1]
+                hash_coeff = hashCoefficients[sketch_row_ind, 2*(elem_idx-1)+1]
                 sketch_col_index += filter_index * hash_coeff
 
-                if elem_idx < size(combs, 1)
+                if elem_idx < num_rows_combs
                     # compute the distance between the occurrence of two filters
-                    next_comb_index_value = combs[elem_idx+1, i]
-                    position1 = refArray[comb_index_value,2,n]
-                    position2 = refArray[next_comb_index_value,2,n]
+                    next_comb_index_value = combs[elem_idx+1, comb_col_ind]
+                    position1 = refArray[comb_index_value, 2, n]
+                    position2 = refArray[next_comb_index_value, 2, n]
                     # take into account of the length of each filter
                     _distance_ = position2 - position1 - filter_len
                     if _distance_ < 0
                         break
                     end
-                    sketch_col_index += hashCoefficients[j, 2*elem_idx] * _distance_
+                    sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * _distance_
                 end
             end
             # get the column index; +1 to adjust to 1-base indexing
@@ -123,12 +125,16 @@ end
 Note:
 
     hashCoefficients is a matrix where 
-        number of rows = number of hash functions = number of rows in sketch
-        number of columns is the "motifs_size"
+        number of rows = number of hash functions = number of rows in the sketch
+        number of columns is the "actual motifs_size" 
 
     comb is a matrix where 
         number of rows = 
             motif_size in the ordinary case
             (motifs_size+1) ÷ 2 in the convolutional case
         number of columns = number of combinations
+
+    "motif_size" (num rows of combs) is equal the number of columns in hashCoefficients when not    using convolutional motifs
+
+    n is the within batch index
 """
