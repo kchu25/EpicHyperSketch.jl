@@ -66,7 +66,7 @@ count-min sketch data structure for approximate frequency estimation.
                   n_counters, n_cols, filter_length)
 ```
 """
-function count_kernel(combs, refArray, hashCoefficients, sketch, filter_len)
+function count_kernel_conv(combs, refArray, hashCoefficients, sketch, filter_len)
     comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x;
     sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y;
     n = (blockIdx().z - 1) * blockDim().z + threadIdx().z;
@@ -121,6 +121,50 @@ function count_kernel(combs, refArray, hashCoefficients, sketch, filter_len)
     return nothing
 end
 
+
+function count_kernel_ordinary(combs, refArray, hashCoefficients, sketch)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x;
+    sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y;
+    n = (blockIdx().z - 1) * blockDim().z + threadIdx().z;
+
+    # i: combination index
+    # j: row index in the sketch
+    # n: within_batch_index
+    num_rows_combs, num_cols_combs = size(combs)
+    num_rows_sketch, num_cols_sketch = size(sketch)
+    num_counters = num_rows_sketch * num_cols_sketch
+
+    N = size(refArray, 3)
+    if comb_col_ind ≤ num_cols_combs && sketch_row_ind ≤ num_rows_sketch && n ≤ N
+        valid = true
+        # ensure all elements in the refArray according to the given combination are valid (non-zero)
+        @inbounds for elem_idx in axes(combs, 1)
+            if refArray[combs[elem_idx, comb_col_ind], 1, n] == 0
+                valid = false
+                break
+            end
+        end
+        # determine which column in the sketch to increment
+        sketch_col_index::Int32 = 0
+        @inbounds if valid
+            # Perform counting operation
+            for elem_idx in 1:num_rows_combs
+                # get the filter number and times the hash coefficient
+                comb_index_value = combs[elem_idx, comb_col_ind]
+                filter_index = refArray[comb_index_value, 1, n]
+                hash_coeff = hashCoefficients[sketch_row_ind, elem_idx]
+                sketch_col_index += filter_index * hash_coeff
+            end
+            # get the column index; +1 to adjust to 1-base indexing
+            sketch_col_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+            # counter increment
+            CUDA.@atomic sketch[sketch_row_ind, sketch_col_index] += 1
+        end
+    end 
+    return nothing
+end
+
+
 """
 Note:
 
@@ -138,3 +182,73 @@ Note:
 
     n is the within batch index
 """
+
+
+
+
+function count_kernel_shared(combs, refArray, hashCoefficients, sketch, filter_len=nothing)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    n = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+
+    num_rows_combs, num_cols_combs = size(combs)
+    num_rows_sketch, num_cols_sketch = size(sketch)
+    num_counters = num_rows_sketch * num_cols_sketch
+    N = size(refArray, 3)
+
+    if comb_col_ind ≤ num_cols_combs && sketch_row_ind ≤ num_rows_sketch && n ≤ N
+        # Check if combination is valid
+        valid = true
+        @inbounds for elem_idx in axes(combs, 1)
+            if refArray[combs[elem_idx, comb_col_ind], 1, n] == 0
+                valid = false
+                break
+            end
+        end
+
+        if valid
+            sketch_col_index = Int32(0)
+            is_conv = filter_len !== nothing
+            
+            @inbounds for elem_idx in 1:num_rows_combs
+                comb_index_value = combs[elem_idx, comb_col_ind]
+                filter_index = refArray[comb_index_value, 1, n]
+                
+                # Different hash coefficient indexing for conv vs ordinary
+                hash_coeff = is_conv ? 
+                    hashCoefficients[sketch_row_ind, 2*(elem_idx-1)+1] :
+                    hashCoefficients[sketch_row_ind, elem_idx]
+                    
+                sketch_col_index += filter_index * hash_coeff
+
+                # Distance calculation only for conv case
+                if is_conv && elem_idx < num_rows_combs
+                    next_comb_index_value = combs[elem_idx+1, comb_col_ind]
+                    position1 = refArray[comb_index_value, 2, n]
+                    position2 = refArray[next_comb_index_value, 2, n]
+                    distance = position2 - position1 - filter_len
+                    
+                    if distance < 0  # overlapping filters
+                        valid = false
+                        break
+                    end
+                    
+                    sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * distance
+                end
+            end
+            
+            if valid
+                sketch_col_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+                CUDA.@atomic sketch[sketch_row_ind, sketch_col_index] += 1
+            end
+        end
+    end
+    return nothing
+end
+
+# Keep original function names for compatibility
+count_kernel_conv(combs, refArray, hashCoefficients, sketch, filter_len) = 
+    count_kernel_shared(combs, refArray, hashCoefficients, sketch, filter_len)
+
+count_kernel_ordinary(combs, refArray, hashCoefficients, sketch) = 
+    count_kernel_shared(combs, refArray, hashCoefficients, sketch)
