@@ -29,9 +29,10 @@ mutable struct Record
     filter_len::Union{Integer, Nothing}
 
     function Record(activation_dict::Dict{T, Vector{S}}, 
-        motif_size::Integer,
+        motif_size::Integer;
         batch_size=BATCH_SIZE,
-        use_cuda::Bool=true
+        use_cuda::Bool=true,
+        filter_len::Union{Integer, Nothing}=nothing
         ) where {T <: Integer, S}
 
         # preprocess the activation_dict
@@ -46,8 +47,11 @@ mutable struct Record
             batch_size=batch_size, case=case, use_cuda=use_cuda)
         cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda)
 
+        selectedCombs = [CUDA.fill(false, 
+            (size(combs, 2), size(vecRefArray[i], 3))) 
+                for i in eachindex(vecRefArray)]
 
-
+        new(vecRefArray, combs, cms, selectedCombs, case, motif_size, filter_len)
     end
 end
 
