@@ -12,7 +12,7 @@
     combinations(1:5, 3) |> collect |> hcat
     ````
 """
-mutable struct record
+mutable struct Record
     # Reference arrays on the selected features for each data point
     vecRefArray::Vector{AbstractArray{IntType, 3}}
     # combinations, store each combination horizontally
@@ -20,7 +20,7 @@ mutable struct record
     # count-min sketch
     cms::CountMinSketch
     # selected combinations
-    selected_combs::Vector{AbstractArray{Bool, 2}}
+    selectedCombs::Vector{AbstractArray{Bool, 2}}
     # case: :OrdinaryFeatures or :Convolution
     case::Symbol
     # size of the motif (number of features/filters per motif)
@@ -28,7 +28,7 @@ mutable struct record
     # filter length (for convolution case)
     filter_len::Union{Integer, Nothing}
 
-    function record(activation_dict::Dict{T, Vector{S}}, 
+    function Record(activation_dict::Dict{T, Vector{S}}, 
         motif_size::Integer,
         batch_size=BATCH_SIZE,
         use_cuda::Bool=true
@@ -51,7 +51,7 @@ mutable struct record
     end
 end
 
-num_batches(r::record) = length(r.vecRefArray)
+num_batches(r::Record) = length(r.vecRefArray)
 
 ##### below are helper functions for record construction #####
 
