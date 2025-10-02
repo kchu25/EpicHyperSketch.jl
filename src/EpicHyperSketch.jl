@@ -56,7 +56,8 @@ function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketc
     num_combs = size(r.combs, 2)
     batch_size = size(r.vecRefArray[batch_idx], 3)
     blocks = (cld(num_combs, threads[1]), cld(batch_size, threads[2]))
-    common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx], config.min_count)
+    common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, 
+        r.cms.sketch, r.selectedCombs[batch_idx], config.min_count)
 
     if r.case == :OrdinaryFeatures
         @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args...)
