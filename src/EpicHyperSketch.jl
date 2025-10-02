@@ -99,6 +99,45 @@ function make_selection!(r::Record;
 end
 
 
+function _obtain_enriched_configurations_(r::Record)
+    #= get the configurations; (i.e. where 
+        (combination, seq) in the placeholder 
+        from the sketch exceed min_count) =#
+    enriched_configs = Vector{Set{Tuple}}(undef, num_batches(r))
+    for i = 1:num_batches(r)
+        # @info "obtaining enriched configurations for batch $i"
+        where_exceeds = findall(r.selectedCombs[i] .== true)
+        # @info "grid : $(where_exceeds)"
+        
+        configs = CuMatrix{int_type}(IntType, (length(where_exceeds), config_size(r)));
+
+        if length(where_exceeds) == 0
+            enriched_configs[i] = Set{Vector{IntType}}() 
+        else
+            @assert r.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
+
+            if r.case == :OrdinaryFeatures
+                @cuda threads=default_num_threads1D blocks=ceil(IntType, length(where_exceeds)) obtain_configs_ordinary!(
+                    where_exceeds, r.combs, r.refArray[i], configs)
+            elseif r.case == :Convolution
+                @cuda threads=default_num_threads1D blocks=ceil(IntType, length(where_exceeds)) obtain_configs_conv!(
+                    where_exceeds, r.combs, r.refArray[i], configs, r.filter_len)
+            else
+                error("Unsupported case: $(r.case)")
+            end
+
+            enriched_configs[i] = map(x->Tuple(x), eachrow(Array(configs))) |> Set
+        end
+    end
+
+    # TODO: figure out the enriched_configs type
+    # TODO: refactor this later
+
+    set_here = reduce(union, enriched_configs)
+    return set_here
+end
+
+
 function obtain_enriched_configurations(
     activation_dict;
     min_count::IntType=1,
@@ -116,9 +155,9 @@ function obtain_enriched_configurations(
     # fill in the candidates that meet the min_count threshold
     make_selection!(r; min_count=min_count)
 
-
     # get the enriched configurations
-
+    enriched_configs = _obtain_enriched_configurations_(r)
+    return enriched_configs
 end
 
 

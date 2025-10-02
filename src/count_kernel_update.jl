@@ -164,6 +164,38 @@ function count_kernel_ordinary_get_candidate(combs, refArray, hashCoefficients, 
 end
 
 
+# obtain the configurations from the placeholder_count (convolution case)
+function obtain_configs_conv!(CindsVec, combs, refArray, configs, fil_len)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x;
+    I = length(CindsVec)
+    K = size(combs, 1)
+    if i ≤ I
+        j, n = CindsVec[i][1], CindsVec[i][2] # j-th combination, n-th sequence
+        @inbounds for k = 1:K
+            configs[i, 2*(k-1)+1] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
+            if k < K
+                configs[i, 2*k] = 
+                    refArray[combs[k+1, j], POSITION_COLUMN, n] - refArray[combs[k, j], POSITION_COLUMN, n] - fil_len
+            end
+        end
+    end
+    return nothing
+end
+
+# obtain the configurations from the placeholder_count (ordinary features case)
+function obtain_configs_ordinary!(CindsVec, combs, refArray, configs)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x;
+    I = length(CindsVec)
+    K = size(combs, 1)
+    if i ≤ I
+        j, n = CindsVec[i][1], CindsVec[i][2] # j-th combination, n-th sequence
+        @inbounds for k = 1:K
+            configs[i, k] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
+        end
+    end
+    return nothing
+end
+
 
 
 

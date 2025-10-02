@@ -58,10 +58,22 @@ mutable struct Record
     end
 end
 
+"""
+    config_size(r::Record)
+
+For `:OrdinaryFeatures`: Returns `motif_size` (one coefficient per feature position).
+For `:Convolution`: Returns `2 * motif_size - 1` (coefficients for both features and distances).
+"""
+function config_size(r::Record)
+    r.case == :OrdinaryFeatures && return r.motif_size
+    r.case == :Convolution && return 2 * r.motif_size - 1
+    error("Unsupported case: $(r.case)")
+end
+
+
 get_cuda_count_tuple2d(r::Record, i::Integer) = (size(r.combs, 2), size(r.vecRefArray[i], 3))
 get_cuda_count_tuple3d(r::Record, i::Int) = 
     (size(r.combs, 2), size(r.cms.sketch, 1), size(r.vecRefArray[i], 3))
-
 
 num_batches(r::Record) = length(r.vecRefArray)
 
