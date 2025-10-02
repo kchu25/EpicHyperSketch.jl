@@ -43,11 +43,15 @@ mutable struct Record
         sort_activation_dict!(activation_dict)
         # determine case and max_active_length
         case = dict_case(activation_dict)
+        @info "Determined case: $case"
         max_active_len = get_max_active_len(activation_dict)
+        @info "Max active length: $max_active_len"
+        @info "Generating combinations and constructing reference arrays..."
         # generate combinations
         combs = generate_combinations(motif_size, max_active_len; use_cuda=use_cuda)
         vecRefArray = constructVecRefArrays(activation_dict, max_active_len; 
             batch_size=batch_size, case=case, use_cuda=use_cuda)
+        @info "Generating sketch..."
         cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda)
 
         selectedCombs = [CUDA.fill(false, 
