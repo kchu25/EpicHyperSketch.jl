@@ -163,29 +163,6 @@ function obtain_enriched_configurations(
     return _obtain_enriched_configurations_(r, config)
 end
 
-# Convenience method with individual parameters (backward compatibility)
-# function obtain_enriched_configurations(
-#     activation_dict::ActivationDict;
-#     min_count::IntType=IntType(25),
-#     delta::Float64=DEFAULT_CMS_DELTA,
-#     epsilon::Float64=DEFAULT_CMS_EPSILON,
-#     motif_size::Integer=3,
-#     filter_len::Union{Integer,Nothing}=8,
-#     kwargs...
-# )
-#     config = HyperSketchConfig(;
-#         delta=delta, 
-#         epsilon=epsilon, 
-#         min_count=min_count,
-#         kwargs...
-#     )
-#     return obtain_enriched_configurations(activation_dict; 
-#                                         motif_size=motif_size,
-#                                         filter_len=filter_len, 
-#                                         config=config)
-# end
-
-
 export CountMinSketch, 
        Record,
        HyperSketchConfig,
