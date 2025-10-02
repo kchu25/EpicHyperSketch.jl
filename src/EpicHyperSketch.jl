@@ -147,7 +147,7 @@ function obtain_enriched_configurations(
     @info "Counting completed. Starting selection..."
     make_selection!(r, config)
 
-     # Debug selection results
+    # Debug selection results
     # @info "Selection results for first batch:"
     # if !isempty(r.selectedCombs)
     #     selected_indices = findall(Array(r.selectedCombs[1]) .== true)
