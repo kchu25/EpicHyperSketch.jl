@@ -222,7 +222,7 @@ hashCoefficients: (num_hash_functions x "motif_size") matrix
     - Rows: number of hash functions (equals sketch height)
     - Columns: motif_size (ordinary) or 2 x motif_size - 1 (convolution)
 
-combs: (motif_elements x num_combinations) matrix  
+combs: (num_motif_elements x num_combinations) matrix  
     - Rows: motif_size (ordinary) or ⌈motif_size/2⌉ (convolution)
     - Columns: total number of filter/feature combinations
 

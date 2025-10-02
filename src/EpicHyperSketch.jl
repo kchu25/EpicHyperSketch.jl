@@ -5,11 +5,11 @@ using Combinatorics
 #
 
 const IntType = Int32 # RTX 3090 has dedicated INT32 execution units in each SM 
-const PrimeNumber = IntType(50000101)  # A large prime number for hashing
+# const PrimeNumber = IntType(50000101)  # A large prime number for hashing
 # Default error probability (delta) for Count-Min Sketch.
 const DEFAULT_CMS_DELTA = 0.0001  
 # Default error tolerance (epsilon) for Count-Min Sketch.
-const DEFAULT_CMS_EPSILON = 0.00005  
+const DEFAULT_CMS_EPSILON = 0.00005
 # Default minimum count threshold for enriched configuration.
 const default_min_count = 1
 # Default batch_size for refArray in vecRefArray
@@ -123,7 +123,7 @@ end
 function obtain_enriched_configurations(
     activation_dict::ActivationDict;
     motif_size::Integer=3,
-    filter_len::Union{Integer,Nothing}=8,
+    filter_len::Union{Integer,Nothing}=nothing,
     min_count::Integer=1, 
     config::HyperSketchConfig=default_config(min_count=min_count)
 )
