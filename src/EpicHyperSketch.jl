@@ -50,22 +50,22 @@ function _launch_count_kernel!(r::Record, batch_idx::Int, config::HyperSketchCon
 end
 
 # Helper function to dispatch candidate selection kernel based on case
-function _launch_selection_kernel!(r::Record, batch_idx::Int, min_count::Int, config::HyperSketchConfig)
+function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketchConfig)
     common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx])
     threads = config.threads_2d
     blocks = ceil.(Int, get_cuda_count_tuple2d(r, batch_idx))
     
     if r.case == :OrdinaryFeatures
-        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args..., min_count)
+        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args..., config.min_count)
     elseif r.case == :Convolution
-        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(common_args..., min_count)
+        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(common_args..., config.min_count)
     else
         error("Unsupported case: $(r.case)")
     end
 end
 
 # Helper function to dispatch config extraction kernel based on case
-function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, motifs_obtained)
+function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, motifs_obtained, config::HyperSketchConfig)
     threads = config.threads_1d
     blocks = ceil(IntType, length(where_exceeds))
     
@@ -93,7 +93,7 @@ end
 function make_selection!(r::Record, config::HyperSketchConfig)
     """Identify combinations that meet minimum count threshold."""
     for batch_idx = 1:num_batches(r)
-        _launch_selection_kernel!(r, batch_idx, config.min_count, config)
+        _launch_selection_kernel!(r, batch_idx, config)
         CUDA.synchronize()
     end
 end
@@ -111,7 +111,7 @@ function _obtain_enriched_configurations_(r::Record, config::HyperSketchConfig)
             enriched_motifs[batch_idx] = Set{Vector{IntType}}()
         else
             motifs_obtained = CuMatrix{IntType}(undef, length(where_exceeds), actual_motif_size(r))
-            _launch_config_kernel!(r, batch_idx, where_exceeds, motifs_obtained)
+            _launch_config_kernel!(r, batch_idx, where_exceeds, motifs_obtained, config)
             enriched_motifs[batch_idx] = Set(map(Tuple, eachrow(Array(motifs_obtained))))
         end
     end
