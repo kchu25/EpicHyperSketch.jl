@@ -226,6 +226,10 @@ combs: (num_motif_elements x num_combinations) matrix
     - Rows: motif_size (ordinary) or ⌈motif_size/2⌉ (convolution)
     - Columns: total number of filter/feature combinations
 
+selectedCombs: (num_combinations x min(batch_size, num_sequences)) boolean matrix
+    - Rows: total number of filter/feature combinations
+    - Columns: batch size (number of sequences in current batch)
+
 Parameters:
     - motif_size: number of filters/features per motif
     - n: batch index for current sample
