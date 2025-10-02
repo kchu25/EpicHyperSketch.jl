@@ -39,102 +39,90 @@ const default_num_threads3D = (8, 8, 8)
 
 include("sketch.jl")
 include("record.jl")
+include("count_kernel_update.jl")
 
+
+# Helper function to dispatch kernel based on case
+function _launch_count_kernel!(r::Record, batch_idx::Int)
+    common_args = (r.combs, r.refArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch)
+    threads = default_num_threads3D
+    blocks = ceil.(Int, get_cuda_count_tuple3d(r, batch_idx))
+    
+    if r.case == :OrdinaryFeatures
+        @cuda threads=threads blocks=blocks count_kernel_ordinary(common_args...)
+    elseif r.case == :Convolution
+        @cuda threads=threads blocks=blocks count_kernel_conv(common_args..., r.filter_len)
+    else
+        error("Unsupported case: $(r.case)")
+    end
+end
+
+# Helper function to dispatch candidate selection kernel based on case
+function _launch_selection_kernel!(r::Record, batch_idx::Int, min_count::Int)
+    common_args = (r.combs, r.refArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx])
+    threads = default_num_threads2D
+    blocks = ceil.(Int, get_cuda_count_tuple2d(r, batch_idx))
+    
+    if r.case == :OrdinaryFeatures
+        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args..., min_count)
+    elseif r.case == :Convolution
+        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(common_args..., min_count)
+    else
+        error("Unsupported case: $(r.case)")
+    end
+end
+
+# Helper function to dispatch config extraction kernel based on case
+function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, configs)
+    threads = default_num_threads1D
+    blocks = ceil(IntType, length(where_exceeds))
+    
+    if r.case == :OrdinaryFeatures
+        @cuda threads=threads blocks=blocks obtain_configs_ordinary!(where_exceeds, r.combs, r.refArray[batch_idx], configs)
+    elseif r.case == :Convolution
+        @cuda threads=threads blocks=blocks obtain_configs_conv!(where_exceeds, r.combs, r.refArray[batch_idx], configs, r.filter_len)
+    else
+        error("Unsupported case: $(r.case)")
+    end
+end
 
 function count!(r::Record)
-    # execute the counting on the sketch
+    """Execute counting on the sketch for all batches."""
     @assert r.use_cuda "count! currently only supports use_cuda=true"
-    for i = 1:num_batches(r)
-        if r.case == :OrdinaryFeatures
-            @cuda threads=default_num_threads3D blocks=ceil.(
-                Int, get_cuda_count_tuple3d(r, i)) count_kernel_ordinary(
-                    r.combs, 
-                    r.refArray[i], 
-                    r.cms.hash_coeffs, 
-                    r.cms.sketch);
-        elseif r.case == :Convolution
-            @cuda threads=default_num_threads3D blocks=ceil.(
-                    Int, get_cuda_count_tuple3d(r, i)) count_kernel_conv(
-                        r.combs, 
-                        r.refArray[i], 
-                        r.cms.hash_coeffs, 
-                        r.cms.sketch, 
-                        r.filter_len);
-        else
-            error("Unsupported case: $(r.case)")
-        end
+    
+    for batch_idx = 1:num_batches(r)
+        _launch_count_kernel!(r, batch_idx)
         CUDA.synchronize()
     end
 end
 
-
-function make_selection!(r::Record;
-        min_count=default_min_count)
-    # get the placeholder_count
-    for i = 1:num_batches(r)
-        # @info "placeholder_count before: $(sum(r.placeholder_count[i]))"
-        if r.case == :OrdinaryFeatures
-            @cuda threads=default_num_threads2D blocks=ceil.(
-                Int, get_cuda_count_tuple2d(r, i)) count_kernel_ordinary_get_candidate(
-                    r.combs, 
-                    r.refArray[i], 
-                    r.cms.hash_coeffs, 
-                    r.cms.sketch, 
-                    r.selectedCombs[i],
-                    min_count)
-        elseif r.case == :Convolution
-            @cuda threads=default_num_threads2D blocks=ceil.(
-                Int, get_cuda_count_tuple2d(r, i)) count_kernel_conv_get_candidates(
-                    r.combs, 
-                    r.refArray[i], 
-                    r.cms.hash_coeffs, 
-                    r.cms.sketch, 
-                    r.selectedCombs[i],
-                    min_count)      
-        else
-            error("Unsupported case: $(r.case)")
-        end
+function make_selection!(r::Record; min_count=default_min_count)
+    """Identify combinations that meet minimum count threshold."""
+    for batch_idx = 1:num_batches(r)
+        _launch_selection_kernel!(r, batch_idx, min_count)
         CUDA.synchronize()
     end
 end
-
 
 function _obtain_enriched_configurations_(r::Record)
-    #= get the configurations; (i.e. where 
-        (combination, seq) in the placeholder 
-        from the sketch exceed min_count) =#
+    """Extract configurations where combinations exceed minimum count threshold."""
+    @assert r.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
+    
     enriched_configs = Vector{Set{Tuple}}(undef, num_batches(r))
-    for i = 1:num_batches(r)
-        # @info "obtaining enriched configurations for batch $i"
-        where_exceeds = findall(r.selectedCombs[i] .== true)
-        # @info "grid : $(where_exceeds)"
+    
+    for batch_idx = 1:num_batches(r)
+        where_exceeds = findall(r.selectedCombs[batch_idx] .== true)
         
-        configs = CuMatrix{int_type}(IntType, (length(where_exceeds), config_size(r)));
-
-        if length(where_exceeds) == 0
-            enriched_configs[i] = Set{Vector{IntType}}() 
+        if isempty(where_exceeds)
+            enriched_configs[batch_idx] = Set{Vector{IntType}}()
         else
-            @assert r.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
-
-            if r.case == :OrdinaryFeatures
-                @cuda threads=default_num_threads1D blocks=ceil(IntType, length(where_exceeds)) obtain_configs_ordinary!(
-                    where_exceeds, r.combs, r.refArray[i], configs)
-            elseif r.case == :Convolution
-                @cuda threads=default_num_threads1D blocks=ceil(IntType, length(where_exceeds)) obtain_configs_conv!(
-                    where_exceeds, r.combs, r.refArray[i], configs, r.filter_len)
-            else
-                error("Unsupported case: $(r.case)")
-            end
-
-            enriched_configs[i] = map(x->Tuple(x), eachrow(Array(configs))) |> Set
+            configs = CuMatrix{IntType}(undef, length(where_exceeds), config_size(r))
+            _launch_config_kernel!(r, batch_idx, where_exceeds, configs)
+            enriched_configs[batch_idx] = Set(map(Tuple, eachrow(Array(configs))))
         end
     end
-
-    # TODO: figure out the enriched_configs type
-    # TODO: refactor this later
-
-    set_here = reduce(union, enriched_configs)
-    return set_here
+    
+    return reduce(union, enriched_configs)
 end
 
 
