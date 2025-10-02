@@ -36,7 +36,7 @@ include("count_kernel_update.jl")
 
 # Helper function to dispatch kernel based on case
 function _launch_count_kernel!(r::Record, batch_idx::Int, config::HyperSketchConfig)
-    common_args = (r.combs, r.refArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch)
+    common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch)
     threads = config.threads_3d
     blocks = ceil.(Int, get_cuda_count_tuple3d(r, batch_idx))
     
@@ -51,7 +51,7 @@ end
 
 # Helper function to dispatch candidate selection kernel based on case
 function _launch_selection_kernel!(r::Record, batch_idx::Int, min_count::Int, config::HyperSketchConfig)
-    common_args = (r.combs, r.refArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx])
+    common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx])
     threads = config.threads_2d
     blocks = ceil.(Int, get_cuda_count_tuple2d(r, batch_idx))
     
@@ -71,10 +71,10 @@ function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, motifs
     
     if r.case == :OrdinaryFeatures
         @cuda threads=threads blocks=blocks obtain_motifs_ordinary!(
-            where_exceeds, r.combs, r.refArray[batch_idx], motifs_obtained)
+            where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained)
     elseif r.case == :Convolution
         @cuda threads=threads blocks=blocks obtain_motifs_conv!(
-            where_exceeds, r.combs, r.refArray[batch_idx], motifs_obtained, r.filter_len)
+            where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained, r.filter_len)
     else
         error("Unsupported case: $(r.case)")
     end
@@ -133,13 +133,16 @@ function obtain_enriched_configurations(
     check_cuda_requirements(config.use_cuda)
     
     # Create record with configuration
+    @info "Constructing Record..."
     r = Record(activation_dict, motif_size; 
                batch_size=config.batch_size,
                use_cuda=config.use_cuda, 
                filter_len=filter_len)
-    
+
+    @info "Starting to count..."
     # Execute pipeline
     count!(r, config)
+    @info "Counting completed. Starting selection..."
     make_selection!(r, config)
 
     return _obtain_enriched_configurations_(r, config)
