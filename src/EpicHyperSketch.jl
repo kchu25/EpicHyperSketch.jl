@@ -11,7 +11,7 @@ const DEFAULT_CMS_DELTA = 0.0001
 # Default error tolerance (epsilon) for Count-Min Sketch.
 const DEFAULT_CMS_EPSILON = 0.00005  
 # Default minimum count threshold for enriched configuration.
-const default_min_count = 25
+const default_min_count = 1
 # Default batch_size for refArray in vecRefArray
 const BATCH_SIZE = 500
 
@@ -124,7 +124,8 @@ function obtain_enriched_configurations(
     activation_dict::ActivationDict;
     motif_size::Integer=3,
     filter_len::Union{Integer,Nothing}=8,
-    config::HyperSketchConfig=default_config()
+    min_count::Integer=1, 
+    config::HyperSketchConfig=default_config(min_count=min_count)
 )
     # Validation
     validate_activation_dict(activation_dict)
@@ -135,8 +136,7 @@ function obtain_enriched_configurations(
     r = Record(activation_dict, motif_size; 
                batch_size=config.batch_size,
                use_cuda=config.use_cuda, 
-               filter_len=filter_len,
-               config=config)
+               filter_len=filter_len)
     
     # Execute pipeline
     count!(r, config)
