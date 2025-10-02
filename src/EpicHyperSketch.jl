@@ -55,13 +55,12 @@ function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketc
     num_combs = size(r.combs, 2)
     batch_size = size(r.vecRefArray[batch_idx], 3)
     blocks = (cld(num_combs, threads[1]), cld(batch_size, threads[2]))
-    
+    common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx], config.min_count)
+
     if r.case == :OrdinaryFeatures
-        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(
-            r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx], config.min_count)
+        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args...)
     elseif r.case == :Convolution
-        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(
-            r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.filter_len, r.selectedCombs[batch_idx], config.min_count)
+        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(common_args..., r.filter_len)
     else
         error("Unsupported case: $(r.case)")
     end

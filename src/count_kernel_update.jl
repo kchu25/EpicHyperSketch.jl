@@ -135,7 +135,7 @@ end
 CUDA kernel for convolution-based candidate selection with position-aware hashing.
 Computes minimum across all hash functions for proper Count-Min Sketch behavior.
 """
-function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, sketch, filter_len, selectedCombs, min_count)
+function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, sketch, selectedCombs, min_count, filter_len)
     comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     n = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     
