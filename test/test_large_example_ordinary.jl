@@ -128,9 +128,6 @@ function verify_ground_truth(activation_dict, motif_size=3; check_subsets=true)
         end
     end
 
-    # Sort consecutive motifs by count (descending)
-
-
     if check_subsets
         # Sort subset motifs by count (descending)
         sorted_subsets = sort(collect(subset_motif_counts), by=x -> x[2], rev=true)
