@@ -12,12 +12,12 @@ Base.@kwdef struct HyperSketchConfig
     min_count::IntType = IntType(default_min_count)
     batch_size::Int = BATCH_SIZE
     
-    # CUDA parameters
+    # CUDA Kernel Launch Parameters
     use_cuda::Bool = true
-    threads_1d::Tuple{Int} = default_num_threads1D
-    threads_2d::Tuple{Int,Int} = default_num_threads2D
-    threads_3d::Tuple{Int,Int,Int} = default_num_threads3D
-    
+    threads_1d::Tuple{Int} = (128,)
+    threads_2d::Tuple{Int,Int} = (24, 24)
+    threads_3d::Tuple{Int,Int,Int} = (8, 8, 8)
+
     # Validation
     function HyperSketchConfig(delta, epsilon, min_count, batch_size, use_cuda, threads_1d, threads_2d, threads_3d)
         validate_probability(delta, "delta")

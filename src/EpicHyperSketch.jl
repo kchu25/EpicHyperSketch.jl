@@ -25,18 +25,6 @@ const refArraysSecondDim = Dict(
     :Convolution => 2
 )
 
-# CUDA Kernel Launch Parameters
-# Default number of threads for 1D CUDA kernels.
-const default_num_threads1D = (128,)
-
-# Default number of threads for 2D CUDA kernels.
-const default_num_threads2D = (24, 24)
-
-# Default number of threads for 3D CUDA kernels.
-const default_num_threads3D = (8, 8, 8)
-
-
-
 include("types.jl")
 include("errors.jl") 
 include("config.jl")
@@ -47,9 +35,9 @@ include("count_kernel_update.jl")
 
 
 # Helper function to dispatch kernel based on case
-function _launch_count_kernel!(r::Record, batch_idx::Int)
+function _launch_count_kernel!(r::Record, batch_idx::Int, config::HyperSketchConfig)
     common_args = (r.combs, r.refArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch)
-    threads = default_num_threads3D
+    threads = config.threads_3d
     blocks = ceil.(Int, get_cuda_count_tuple3d(r, batch_idx))
     
     if r.case == :OrdinaryFeatures
@@ -62,9 +50,9 @@ function _launch_count_kernel!(r::Record, batch_idx::Int)
 end
 
 # Helper function to dispatch candidate selection kernel based on case
-function _launch_selection_kernel!(r::Record, batch_idx::Int, min_count::Int)
+function _launch_selection_kernel!(r::Record, batch_idx::Int, min_count::Int, config::HyperSketchConfig)
     common_args = (r.combs, r.refArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx])
-    threads = default_num_threads2D
+    threads = config.threads_2d
     blocks = ceil.(Int, get_cuda_count_tuple2d(r, batch_idx))
     
     if r.case == :OrdinaryFeatures
@@ -77,56 +65,58 @@ function _launch_selection_kernel!(r::Record, batch_idx::Int, min_count::Int)
 end
 
 # Helper function to dispatch config extraction kernel based on case
-function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, configs)
-    threads = default_num_threads1D
+function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, motifs_obtained)
+    threads = config.threads_1d
     blocks = ceil(IntType, length(where_exceeds))
     
     if r.case == :OrdinaryFeatures
-        @cuda threads=threads blocks=blocks obtain_configs_ordinary!(where_exceeds, r.combs, r.refArray[batch_idx], configs)
+        @cuda threads=threads blocks=blocks obtain_motifs_ordinary!(
+            where_exceeds, r.combs, r.refArray[batch_idx], motifs_obtained)
     elseif r.case == :Convolution
-        @cuda threads=threads blocks=blocks obtain_configs_conv!(where_exceeds, r.combs, r.refArray[batch_idx], configs, r.filter_len)
+        @cuda threads=threads blocks=blocks obtain_motifs_conv!(
+            where_exceeds, r.combs, r.refArray[batch_idx], motifs_obtained, r.filter_len)
     else
         error("Unsupported case: $(r.case)")
     end
 end
 
-function count!(r::Record)
+function count!(r::Record, config::HyperSketchConfig)
     """Execute counting on the sketch for all batches."""
     @assert r.use_cuda "count! currently only supports use_cuda=true"
     
     for batch_idx = 1:num_batches(r)
-        _launch_count_kernel!(r, batch_idx)
+        _launch_count_kernel!(r, batch_idx, config)
         CUDA.synchronize()
     end
 end
 
-function make_selection!(r::Record; min_count=default_min_count)
+function make_selection!(r::Record, config::HyperSketchConfig)
     """Identify combinations that meet minimum count threshold."""
     for batch_idx = 1:num_batches(r)
-        _launch_selection_kernel!(r, batch_idx, min_count)
+        _launch_selection_kernel!(r, batch_idx, config.min_count, config)
         CUDA.synchronize()
     end
 end
 
-function _obtain_enriched_configurations_(r::Record, config)
+function _obtain_enriched_configurations_(r::Record, config::HyperSketchConfig)
     """Extract configurations where combinations exceed minimum count threshold."""
     @assert config.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
     
-    enriched_configs = Vector{Set{Tuple}}(undef, num_batches(r))
+    enriched_motifs = Vector{Set{Tuple}}(undef, num_batches(r))
     
     for batch_idx = 1:num_batches(r)
         where_exceeds = findall(r.selectedCombs[batch_idx] .== true)
         
         if isempty(where_exceeds)
-            enriched_configs[batch_idx] = Set{Vector{IntType}}()
+            enriched_motifs[batch_idx] = Set{Vector{IntType}}()
         else
-            configs = CuMatrix{IntType}(undef, length(where_exceeds), config_size(r))
-            _launch_config_kernel!(r, batch_idx, where_exceeds, configs)
-            enriched_configs[batch_idx] = Set(map(Tuple, eachrow(Array(configs))))
+            motifs_obtained = CuMatrix{IntType}(undef, length(where_exceeds), actual_motif_size(r))
+            _launch_config_kernel!(r, batch_idx, where_exceeds, motifs_obtained)
+            enriched_motifs[batch_idx] = Set(map(Tuple, eachrow(Array(motifs_obtained))))
         end
     end
-    
-    return reduce(union, enriched_configs)
+
+    return reduce(union, enriched_motifs)
 end
 
 
@@ -149,33 +139,33 @@ function obtain_enriched_configurations(
                config=config)
     
     # Execute pipeline
-    count!(r)
-    make_selection!(r)
+    count!(r, config)
+    make_selection!(r, config)
 
     return _obtain_enriched_configurations_(r, config)
 end
 
 # Convenience method with individual parameters (backward compatibility)
-function obtain_enriched_configurations(
-    activation_dict::ActivationDict;
-    min_count::IntType=IntType(25),
-    delta::Float64=DEFAULT_CMS_DELTA,
-    epsilon::Float64=DEFAULT_CMS_EPSILON,
-    motif_size::Integer=3,
-    filter_len::Union{Integer,Nothing}=8,
-    kwargs...
-)
-    config = HyperSketchConfig(;
-        delta=delta, 
-        epsilon=epsilon, 
-        min_count=min_count,
-        kwargs...
-    )
-    return obtain_enriched_configurations(activation_dict; 
-                                        motif_size=motif_size,
-                                        filter_len=filter_len, 
-                                        config=config)
-end
+# function obtain_enriched_configurations(
+#     activation_dict::ActivationDict;
+#     min_count::IntType=IntType(25),
+#     delta::Float64=DEFAULT_CMS_DELTA,
+#     epsilon::Float64=DEFAULT_CMS_EPSILON,
+#     motif_size::Integer=3,
+#     filter_len::Union{Integer,Nothing}=8,
+#     kwargs...
+# )
+#     config = HyperSketchConfig(;
+#         delta=delta, 
+#         epsilon=epsilon, 
+#         min_count=min_count,
+#         kwargs...
+#     )
+#     return obtain_enriched_configurations(activation_dict; 
+#                                         motif_size=motif_size,
+#                                         filter_len=filter_len, 
+#                                         config=config)
+# end
 
 
 export CountMinSketch, 

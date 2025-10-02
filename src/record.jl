@@ -59,12 +59,12 @@ mutable struct Record
 end
 
 """
-    config_size(r::Record)
+    actual_motif_size(r::Record)
 
 For `:OrdinaryFeatures`: Returns `motif_size` (one coefficient per feature position).
 For `:Convolution`: Returns `2 * motif_size - 1` (coefficients for both features and distances).
 """
-function config_size(r::Record)
+function actual_motif_size(r::Record)
     r.case == :OrdinaryFeatures && return r.motif_size
     r.case == :Convolution && return 2 * r.motif_size - 1
     error("Unsupported case: $(r.case)")

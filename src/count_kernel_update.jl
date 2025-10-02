@@ -176,20 +176,20 @@ end
 """
 Extract configurations for convolution case: filter IDs and inter-filter distances.
 """
-function obtain_configs_conv!(CindsVec, combs, refArray, configs, filter_len)
+function obtain_motifs_conv!(CindsVec, combs, refArray, motifs_obtained, filter_len)
     i, j, n, in_bounds = _config_kernel_setup(CindsVec)
     
     if in_bounds
         K = size(combs, 1)
         @inbounds for k = 1:K
             # Store filter ID
-            configs[i, 2*(k-1)+1] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
-            
+            motifs_obtained[i, 2*(k-1)+1] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
+
             # Store distance to next filter (if not last)
             if k < K
                 pos1 = refArray[combs[k, j], POSITION_COLUMN, n]
                 pos2 = refArray[combs[k+1, j], POSITION_COLUMN, n]
-                configs[i, 2*k] = pos2 - pos1 - filter_len
+                motifs_obtained[i, 2*k] = pos2 - pos1 - filter_len
             end
         end
     end
@@ -199,13 +199,13 @@ end
 """
 Extract configurations for ordinary case: only filter/feature IDs.
 """
-function obtain_configs_ordinary!(CindsVec, combs, refArray, configs)
+function obtain_motifs_ordinary!(CindsVec, combs, refArray, motifs_obtained)
     i, j, n, in_bounds = _config_kernel_setup(CindsVec)
     
     if in_bounds
         K = size(combs, 1)
         @inbounds for k = 1:K
-            configs[i, k] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
+            motifs_obtained[i, k] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
         end
     end
     return nothing
