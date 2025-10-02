@@ -27,6 +27,14 @@ using IterTools
     end
 
 
+    activation_dict = Dict(
+         1=>[(filter=2, position=5), (filter=2, position=10), (filter=3, position=15)], 
+         2=>[(filter=1, position=15), (filter=3, position=25)], 
+         3=>[(filter=2, position=1), (filter=2, position=6), (filter=3, position=12)],
+         4=>[(filter=1, position=3), (filter=2, position=8), (filter=4, position=20)],
+         5=>[(filter=3, position=7), (filter=4, position=14)],
+        )
+
     @testset "Record construction test set 1" begin
         E = EpicHyperSketch
 
@@ -37,14 +45,7 @@ using IterTools
                 n is the within-batch index
         """
 
-        activation_dict = Dict(
-         1=>[(filter=2, position=5), (filter=2, position=10), (filter=3, position=15)], 
-         2=>[(filter=1, position=15), (filter=3, position=25)], 
-         3=>[(filter=2, position=1), (filter=2, position=6), (filter=3, position=12)],
-         4=>[(filter=1, position=3), (filter=2, position=8), (filter=4, position=20)],
-         5=>[(filter=3, position=7), (filter=4, position=14)],
-        )
-
+        
         motif_size = 2; batch_size = 2; use_cuda = false
         E.sort_activation_dict!(activation_dict)
 
@@ -69,5 +70,55 @@ using IterTools
         end
     end
 
+    @testset "Record constructor test (CPU only)" begin
+        # Test data for Record construction
+        # activation_dict_ordinary = Dict(
+        #     1 => [10, 20, 30],
+        #     2 => [15, 25],
+        #     3 => [5, 35, 40, 45]
+        # )
+        
+        # activation_dict_convolution = Dict(
+        #     1 => [(filter=2, position=5), (filter=2, position=10), (filter=3, position=15)], 
+        #     2 => [(filter=1, position=15), (filter=3, position=25)], 
+        #     3 => [(filter=2, position=1), (filter=2, position=6), (filter=3, position=12)]
+        # )
+
+        # # Test Record construction with ordinary features (CPU only)
+        # motif_size = 2
+        # batch_size = 2
+        # use_cuda = false
+        # filter_len = nothing
+        
+        # record_ordinary = Record(activation_dict_ordinary, motif_size; 
+        #                         batch_size=batch_size, use_cuda=use_cuda, filter_len=filter_len)
+        
+        # @test isa(record_ordinary, Record)
+        # @test record_ordinary.motif_size == motif_size
+        # @test record_ordinary.case == :OrdinaryFeatures
+        # @test record_ordinary.filter_len == nothing
+        # @test length(record_ordinary.vecRefArray) > 0
+        # @test isa(record_ordinary.cms, CountMinSketch)
+        # @test size(record_ordinary.combs, 1) == motif_size
+        # @test length(record_ordinary.selectedCombs) == length(record_ordinary.vecRefArray)
+
+        # # Test Record construction with convolution features (CPU only)  
+        # filter_len = 8
+        # record_convolution = Record(activation_dict_convolution, motif_size;
+        #                            batch_size=batch_size, use_cuda=use_cuda, filter_len=filter_len)
+        
+        # @test isa(record_convolution, Record)
+        # @test record_convolution.motif_size == motif_size
+        # @test record_convolution.case == :Convolution
+        # @test record_convolution.filter_len == filter_len
+        # @test length(record_convolution.vecRefArray) > 0
+        # @test isa(record_convolution.cms, CountMinSketch)
+        # @test size(record_convolution.combs, 1) == motif_size
+        # @test length(record_convolution.selectedCombs) == length(record_convolution.vecRefArray)
+        
+        # # Test num_batches function
+        # @test num_batches(record_ordinary) == length(record_ordinary.vecRefArray)
+        # @test num_batches(record_convolution) == length(record_convolution.vecRefArray)
+    end
 
 end

@@ -82,6 +82,36 @@ function count_kernel_conv(combs, refArray, hashCoefficients, sketch, filter_len
 end
 
 """
+CUDA kernel for convolution-based candidate selection with position-aware hashing.
+Identifies combinations that meet minimum count threshold and marks them in selectedCombs.
+Works with filter/feature combinations, skips when filters overlap.
+"""
+function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, sketch, filter_len, selectedCombs, min_count)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    n = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+
+    num_rows_combs, num_cols_combs = size(combs)
+    num_rows_sketch, num_cols_sketch = size(sketch)
+    num_counters = num_rows_sketch * num_cols_sketch
+
+    if comb_col_ind ≤ num_cols_combs && sketch_row_ind ≤ num_rows_sketch && n ≤ size(refArray, 3)
+        if is_combination_valid(combs, refArray, comb_col_ind, n)
+            sketch_col_index = calculate_conv_hash(combs, refArray, hashCoefficients, 
+                                                 comb_col_ind, sketch_row_ind, n, 
+                                                 num_rows_combs, filter_len)
+            if sketch_col_index != -1
+                final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+                if sketch[sketch_row_ind, final_index] ≥ min_count
+                    selectedCombs[comb_col_ind, n] = true
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+"""
 CUDA kernel for ordinary counting of filter/feature combinations without position constraints.
 """
 function count_kernel_ordinary(combs, refArray, hashCoefficients, sketch)
@@ -104,6 +134,39 @@ function count_kernel_ordinary(combs, refArray, hashCoefficients, sketch)
     end
     return nothing
 end
+
+"""
+CUDA kernel for ordinary candidate selection without position constraints.
+Identifies combinations that meet minimum count threshold and marks them in selectedCombs.
+Works with filter/feature combinations using basic hash counting.
+"""
+function count_kernel_ordinary_get_candidate(combs, refArray, hashCoefficients, sketch, selectedCombs, min_count)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    n = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+
+    num_rows_combs, num_cols_combs = size(combs)
+    num_rows_sketch, num_cols_sketch = size(sketch)
+    num_counters = num_rows_sketch * num_cols_sketch
+
+    if comb_col_ind ≤ num_cols_combs && sketch_row_ind ≤ num_rows_sketch && n ≤ size(refArray, 3)
+        if is_combination_valid(combs, refArray, comb_col_ind, n)
+            sketch_col_index = calculate_ordinary_hash(combs, refArray, hashCoefficients, 
+                                                     comb_col_ind, sketch_row_ind, n, 
+                                                     num_rows_combs)
+            final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+            if sketch[sketch_row_ind, final_index] ≥ min_count
+                selectedCombs[comb_col_ind, n] = true
+            end
+        end
+    end
+    return nothing
+end
+
+
+
+
+
 
 """
 Data Structure Specifications:

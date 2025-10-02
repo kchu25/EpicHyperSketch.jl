@@ -27,6 +27,9 @@ mutable struct Record
     motif_size::Integer
     # filter length (for convolution case)
     filter_len::Union{Integer, Nothing}
+    # cuda
+    use_cuda::Bool
+
 
     function Record(activation_dict::Dict{T, Vector{S}}, 
         motif_size::Integer;
@@ -51,9 +54,14 @@ mutable struct Record
             (size(combs, 2), size(vecRefArray[i], 3))) 
                 for i in eachindex(vecRefArray)]
 
-        new(vecRefArray, combs, cms, selectedCombs, case, motif_size, filter_len)
+        new(vecRefArray, combs, cms, selectedCombs, case, motif_size, filter_len, use_cuda)
     end
 end
+
+get_cuda_count_tuple2d(r::Record, i::Integer) = (size(r.combs, 2), size(r.vecRefArray[i], 3))
+get_cuda_count_tuple3d(r::Record, i::Int) = 
+    (size(r.combs, 2), size(r.cms.sketch, 1), size(r.vecRefArray[i], 3))
+
 
 num_batches(r::Record) = length(r.vecRefArray)
 
