@@ -37,6 +37,10 @@ const default_num_threads3D = (8, 8, 8)
 
 
 
+include("types.jl")
+include("errors.jl") 
+include("config.jl")
+include("performance.jl")
 include("sketch.jl")
 include("record.jl")
 include("count_kernel_update.jl")
@@ -104,9 +108,9 @@ function make_selection!(r::Record; min_count=default_min_count)
     end
 end
 
-function _obtain_enriched_configurations_(r::Record)
+function _obtain_enriched_configurations_(r::Record, config)
     """Extract configurations where combinations exceed minimum count threshold."""
-    @assert r.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
+    @assert config.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
     
     enriched_configs = Vector{Set{Tuple}}(undef, num_batches(r))
     
@@ -127,29 +131,61 @@ end
 
 
 function obtain_enriched_configurations(
-    activation_dict;
-    min_count::IntType=1,
-    delta::Float64=DEFAULT_CMS_DELTA,
-    epsilon::Float64=DEFAULT_CMS_EPSILON
+    activation_dict::ActivationDict;
+    motif_size::Integer=3,
+    filter_len::Union{Integer,Nothing}=8,
+    config::HyperSketchConfig=default_config()
 )
-    @assert min_count > 0 "min_count must be greater than 0"
-    @assert 0 < delta < 1 "delta must be in (0, 1)"
-    @assert 0 < epsilon < 1 "epsilon must be in (0, 1)"
-
-    # make record
-    r = Record(activation_dict, 3; filter_len=8)
-    # do the counting
+    # Validation
+    validate_activation_dict(activation_dict)
+    validate_motif_size(motif_size)
+    check_cuda_requirements(config.use_cuda)
+    
+    # Create record with configuration
+    r = Record(activation_dict, motif_size; 
+               batch_size=config.batch_size,
+               use_cuda=config.use_cuda, 
+               filter_len=filter_len,
+               config=config)
+    
+    # Execute pipeline
     count!(r)
-    # fill in the candidates that meet the min_count threshold
-    make_selection!(r; min_count=min_count)
+    make_selection!(r)
 
-    # get the enriched configurations
-    enriched_configs = _obtain_enriched_configurations_(r)
-    return enriched_configs
+    return _obtain_enriched_configurations_(r, config)
+end
+
+# Convenience method with individual parameters (backward compatibility)
+function obtain_enriched_configurations(
+    activation_dict::ActivationDict;
+    min_count::IntType=IntType(25),
+    delta::Float64=DEFAULT_CMS_DELTA,
+    epsilon::Float64=DEFAULT_CMS_EPSILON,
+    motif_size::Integer=3,
+    filter_len::Union{Integer,Nothing}=8,
+    kwargs...
+)
+    config = HyperSketchConfig(;
+        delta=delta, 
+        epsilon=epsilon, 
+        min_count=min_count,
+        kwargs...
+    )
+    return obtain_enriched_configurations(activation_dict; 
+                                        motif_size=motif_size,
+                                        filter_len=filter_len, 
+                                        config=config)
 end
 
 
 export CountMinSketch, 
-       Record
+       Record,
+       HyperSketchConfig,
+       default_config,
+       obtain_enriched_configurations,
+       # Errors
+       HyperSketchError,
+       InvalidConfigurationError,
+       CUDAError
 
 end
