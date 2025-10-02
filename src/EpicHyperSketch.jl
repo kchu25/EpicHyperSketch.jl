@@ -51,14 +51,17 @@ end
 
 # Helper function to dispatch candidate selection kernel based on case
 function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketchConfig)
-    common_args = (r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx])
     threads = config.threads_2d
-    blocks = ceil.(Int, get_cuda_count_tuple2d(r, batch_idx))
+    num_combs = size(r.combs, 2)
+    batch_size = size(r.vecRefArray[batch_idx], 3)
+    blocks = (cld(num_combs, threads[1]), cld(batch_size, threads[2]))
     
     if r.case == :OrdinaryFeatures
-        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args..., config.min_count)
+        @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(
+            r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.selectedCombs[batch_idx], config.min_count)
     elseif r.case == :Convolution
-        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(common_args..., config.min_count)
+        @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(
+            r.combs, r.vecRefArray[batch_idx], r.cms.hash_coeffs, r.cms.sketch, r.filter_len, r.selectedCombs[batch_idx], config.min_count)
     else
         error("Unsupported case: $(r.case)")
     end

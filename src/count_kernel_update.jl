@@ -112,30 +112,48 @@ function _process_sketch_update!(sketch, sketch_row_ind, sketch_col_index, num_c
     CUDA.@atomic sketch[sketch_row_ind, final_index] += 1
 end
 
-# Common sketch index calculation and candidate selection logic
-function _process_candidate_selection!(sketch, selectedCombs, sketch_row_ind, sketch_col_index, 
-                                     num_counters, num_cols_sketch, comb_col_ind, n, min_count)
-    final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
-    if sketch[sketch_row_ind, final_index] ≥ min_count
-        selectedCombs[comb_col_ind, n] = true
+# Count-Min Sketch selection: compute minimum across all hash functions
+function _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, comb_col_ind, n, 
+                                   num_counters, num_cols_sketch, hash_func)
+    min_count = typemax(Int32)
+    num_hash_functions = size(sketch, 1)
+    
+    @inbounds for row = 1:num_hash_functions
+        sketch_col_index = hash_func(combs, refArray, hashCoefficients, comb_col_ind, row, n)
+        if sketch_col_index != -1  # valid hash (for conv case)
+            final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+            count = sketch[row, final_index]
+            min_count = min(min_count, count)
+        else
+            return -1  # invalid combination
+        end
     end
+    return min_count
 end
 
 """
 CUDA kernel for convolution-based candidate selection with position-aware hashing.
-Identifies combinations that meet minimum count threshold and marks them in selectedCombs.
+Computes minimum across all hash functions for proper Count-Min Sketch behavior.
 """
 function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, sketch, filter_len, selectedCombs, min_count)
-    comb_col_ind, sketch_row_ind, n, num_counters, num_cols_sketch, in_bounds = 
-        _kernel_setup_and_bounds_check(combs, refArray, sketch)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    n = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     
-    if in_bounds && is_combination_valid(combs, refArray, comb_col_ind, n)
-        sketch_col_index = calculate_conv_hash(combs, refArray, hashCoefficients, 
-                                             comb_col_ind, sketch_row_ind, n, 
-                                             size(combs, 1), filter_len)
-        if sketch_col_index != -1
-            _process_candidate_selection!(sketch, selectedCombs, sketch_row_ind, sketch_col_index,
-                                        num_counters, num_cols_sketch, comb_col_ind, n, min_count)
+    num_cols_combs = size(combs, 2)
+    num_counters = size(sketch, 1) * size(sketch, 2)
+    num_cols_sketch = size(sketch, 2)
+    
+    if comb_col_ind ≤ num_cols_combs && n ≤ size(refArray, 3) && is_combination_valid(combs, refArray, comb_col_ind, n)
+        # Define hash function for convolution case
+        hash_func = (combs, refArray, hashCoefficients, comb_col_ind, row, n) -> begin
+            return calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, row, n, 
+                                     size(combs, 1), filter_len)
+        end
+        
+        cms_count = _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, 
+                                              comb_col_ind, n, num_counters, num_cols_sketch, hash_func)
+        if cms_count ≥ min_count
+            selectedCombs[comb_col_ind, n] = true
         end
     end
     return nothing
@@ -143,18 +161,28 @@ end
 
 """
 CUDA kernel for ordinary candidate selection without position constraints.
-Identifies combinations that meet minimum count threshold and marks them in selectedCombs.
+Computes minimum across all hash functions for proper Count-Min Sketch behavior.
 """
 function count_kernel_ordinary_get_candidate(combs, refArray, hashCoefficients, sketch, selectedCombs, min_count)
-    comb_col_ind, sketch_row_ind, n, num_counters, num_cols_sketch, in_bounds = 
-        _kernel_setup_and_bounds_check(combs, refArray, sketch)
+    comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    n = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     
-    if in_bounds && is_combination_valid(combs, refArray, comb_col_ind, n)
-        sketch_col_index = calculate_ordinary_hash(combs, refArray, hashCoefficients, 
-                                                 comb_col_ind, sketch_row_ind, n, 
-                                                 size(combs, 1))
-        _process_candidate_selection!(sketch, selectedCombs, sketch_row_ind, sketch_col_index,
-                                    num_counters, num_cols_sketch, comb_col_ind, n, min_count)
+    num_cols_combs = size(combs, 2)
+    num_counters = size(sketch, 1) * size(sketch, 2)
+    num_cols_sketch = size(sketch, 2)
+    
+    if comb_col_ind ≤ num_cols_combs && n ≤ size(refArray, 3) && is_combination_valid(combs, refArray, comb_col_ind, n)
+        # Define hash function for ordinary case
+        hash_func = (combs, refArray, hashCoefficients, comb_col_ind, row, n) -> begin
+            return calculate_ordinary_hash(combs, refArray, hashCoefficients, comb_col_ind, row, n, 
+                                         size(combs, 1))
+        end
+        
+        cms_count = _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, 
+                                              comb_col_ind, n, num_counters, num_cols_sketch, hash_func)
+        if cms_count ≥ min_count
+            selectedCombs[comb_col_ind, n] = true
+        end
     end
     return nothing
 end
