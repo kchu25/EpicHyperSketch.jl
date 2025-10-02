@@ -24,9 +24,9 @@ mutable struct Record
     # case: :OrdinaryFeatures or :Convolution
     case::Symbol
     # size of the motif (number of features/filters per motif)
-    motif_size::Integer
+    motif_size::IntType
     # filter length (for convolution case)
-    filter_len::Union{Integer, Nothing}
+    filter_len::Union{IntType, Nothing}
     # cuda
     use_cuda::Bool
 
@@ -58,7 +58,7 @@ mutable struct Record
             (size(combs, 2), size(vecRefArray[i], 3))) 
                 for i in eachindex(vecRefArray)]
 
-        new(vecRefArray, combs, cms, selectedCombs, case, motif_size, filter_len, use_cuda)
+        new(vecRefArray, combs, cms, selectedCombs, case, IntType(motif_size), IntType(filter_len), use_cuda)
     end
 end
 
