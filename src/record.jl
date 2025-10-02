@@ -185,5 +185,7 @@ end
 Filter out keys with empty values from the dictionary.
 """
 function filter_empty!(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
-    filter!((k, v) -> !isempty(v), dict)
+     for k in keys(dict)
+        isempty(dict[k]) && delete!(dict, k)
+    end
 end
