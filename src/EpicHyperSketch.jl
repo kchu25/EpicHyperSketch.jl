@@ -43,6 +43,7 @@ function _launch_count_kernel!(r::Record, batch_idx::Int, config::HyperSketchCon
     if r.case == :OrdinaryFeatures
         @cuda threads=threads blocks=blocks count_kernel_ordinary(common_args...)
     elseif r.case == :Convolution
+        @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
         @cuda threads=threads blocks=blocks count_kernel_conv(common_args..., r.filter_len)
     else
         error("Unsupported case: $(r.case)")
@@ -60,6 +61,7 @@ function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketc
     if r.case == :OrdinaryFeatures
         @cuda threads=threads blocks=blocks count_kernel_ordinary_get_candidate(common_args...)
     elseif r.case == :Convolution
+        @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
         @cuda threads=threads blocks=blocks count_kernel_conv_get_candidates(common_args..., r.filter_len)
     else
         error("Unsupported case: $(r.case)")
@@ -75,6 +77,7 @@ function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, motifs
         @cuda threads=threads blocks=blocks obtain_motifs_ordinary!(
             where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained)
     elseif r.case == :Convolution
+        @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
         @cuda threads=threads blocks=blocks obtain_motifs_conv!(
             where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained, r.filter_len)
     else

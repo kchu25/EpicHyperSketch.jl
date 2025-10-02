@@ -1,11 +1,14 @@
-
-
 """
 Check if all filters/features in a combination are present (non-zero) in refArray.
 """
 function is_combination_valid(combs, refArray, comb_col_ind, n)
     @inbounds for elem_idx in axes(combs, 1)
-        if refArray[combs[elem_idx, comb_col_ind], FILTER_INDEX_COLUMN, n] == 0
+        comb_index_value = combs[elem_idx, comb_col_ind]
+        # Guard against padding/invalid indices (0) or indices outside refArray
+        if comb_index_value == 0
+            return false
+        end
+        if comb_index_value > size(refArray, 1) || refArray[comb_index_value, FILTER_INDEX_COLUMN, n] == 0
             return false
         end
     end
@@ -34,20 +37,28 @@ function calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, sk
     sketch_col_index = Int32(0)
     @inbounds for elem_idx in 1:num_rows_combs
         comb_index_value = combs[elem_idx, comb_col_ind]
+        # Guard against invalid comb index
+        if comb_index_value == 0 || comb_index_value > size(refArray,1)
+            return Int32(-1)
+        end
         filter_index = refArray[comb_index_value, FILTER_INDEX_COLUMN, n]
         hash_coeff = hashCoefficients[sketch_row_ind, 2*(elem_idx-1)+1]
         sketch_col_index += filter_index * hash_coeff
 
         if elem_idx < num_rows_combs
             next_comb_index_value = combs[elem_idx+1, comb_col_ind]
+            # Guard against invalid next index
+            if next_comb_index_value == 0 || next_comb_index_value > size(refArray,1)
+                return Int32(-1)
+            end
             position1 = refArray[comb_index_value, POSITION_COLUMN, n]
             position2 = refArray[next_comb_index_value, POSITION_COLUMN, n]
             distance = position2 - position1 - filter_len
-            
+
             if distance < 0  # overlapping filters
-                return -1  # signal invalid
+                return Int32(-1)  # signal invalid
             end
-            
+
             sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * distance
         end
     end
