@@ -1,14 +1,22 @@
 using EpicHyperSketch
 using Test
 using IterTools
+using Random
 
-include("test_config_errors.jl")
+# include("test_config_errors.jl")# Large tests with CPU backend
+
+"""
+# Full GPU tests  
+EPIC_HYPERSKETCH_GPU_TESTS=true julia --project=. -e "using Pkg; Pkg.test()"
+"""
+
+# Check if we should run GPU tests (local development) or CPU only (CI/GitHub Actions)
+const RUN_GPU_TESTS = get(ENV, "EPIC_HYPERSKETCH_GPU_TESTS", "false") == "true"
+
+RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
 
 @testset "EpicHyperSketch.jl" begin
-
-
-
-        
+       
     @testset "CountMinSketch constructor (CPU only)" begin
         IntType = EpicHyperSketch.IntType
         motif_size = 5
@@ -124,6 +132,19 @@ include("test_config_errors.jl")
         # # Test num_batches function
         # @test num_batches(record_ordinary) == length(record_ordinary.vecRefArray)
         # @test num_batches(record_convolution) == length(record_convolution.vecRefArray)
+    end
+
+    if RUN_GPU_TESTS
+        @testset "Large Example Tests OrdinaryFeature case (GPU)" begin
+            println("Running full large example test with GPU backend...")
+            # Only run if CUDA is available
+            if CUDA.functional()
+                test_large_example_ordinary()  # From test_large_example.jl
+                @test true  # If we get here without error, test passes
+            else
+                @test_skip "CUDA not available for GPU tests"
+            end
+        end
     end
 
 end

@@ -148,18 +148,17 @@ function obtain_enriched_configurations(
     make_selection!(r, config)
 
      # Debug selection results
-    @info "Selection results for first batch:"
-    if !isempty(r.selectedCombs)
-        selected_indices = findall(Array(r.selectedCombs[1]) .== true)
-        println("Selected combination indices: ", selected_indices)
+    # @info "Selection results for first batch:"
+    # if !isempty(r.selectedCombs)
+    #     selected_indices = findall(Array(r.selectedCombs[1]) .== true)
+    #     println("Selected combination indices: ", selected_indices)
         
-        # Show which actual combinations were selected
-        for idx in selected_indices[1:min(5, end)]
-            comb = r.combs[:, idx[1]]
-            println("Selected combination: ", comb)
-        end
-    end
-
+    #     # Show which actual combinations were selected
+    #     for idx in selected_indices[1:min(5, end)]
+    #         comb = r.combs[:, idx[1]]
+    #         println("Selected combination: ", comb)
+    #     end
+    # end
 
     return _obtain_enriched_configurations_(r, config)
 end
