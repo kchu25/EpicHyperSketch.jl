@@ -126,7 +126,7 @@ end
 # Count-Min Sketch selection: compute minimum across all hash functions
 function _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, comb_col_ind, n, 
                                    num_counters, num_cols_sketch, hash_func)
-    min_count = typemax(Int32)
+    min_count = typemax(IntType)
     num_hash_functions = size(sketch, 1)
     
     @inbounds for row = 1:num_hash_functions
@@ -136,7 +136,7 @@ function _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, c
             count = sketch[row, final_index]
             min_count = min(min_count, count)
         else
-            return -1  # invalid combination
+            return IntType(-1)  # invalid combination
         end
     end
     return min_count
@@ -146,7 +146,8 @@ end
 CUDA kernel for convolution-based candidate selection with position-aware hashing.
 Computes minimum across all hash functions for proper Count-Min Sketch behavior.
 """
-function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, sketch, selectedCombs, min_count, filter_len)
+function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, 
+        sketch, selectedCombs, min_count, filter_len)
     comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     n = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     
@@ -164,6 +165,9 @@ function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, ske
         cms_count = _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, 
                                               comb_col_ind, n, num_counters, num_cols_sketch, hash_func)
         if cms_count ≥ min_count
+            #  @cuprintf("cms_count=%d, min_count=%d\n", cms_count, min_count)
+            #  @cuprintf("min_count=%d\n", min_count)
+            #  @cuprintf(cms_count)
             selectedCombs[comb_col_ind, n] = true
         end
     end
