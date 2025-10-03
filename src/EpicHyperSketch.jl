@@ -32,6 +32,7 @@ include("performance.jl")
 include("sketch.jl")
 include("record.jl")
 include("count_kernel_update.jl")
+include("count_cpu.jl")
 
 
 # Helper function to dispatch kernel based on case
@@ -172,6 +173,10 @@ export CountMinSketch,
        HyperSketchConfig,
        default_config,
        obtain_enriched_configurations,
+       # CPU versions
+       obtain_enriched_configurations_cpu,
+       count_cpu!,
+       make_selection_cpu!,
        # Errors
        HyperSketchError,
        InvalidConfigurationError,

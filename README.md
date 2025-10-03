@@ -5,15 +5,7 @@
 [![Build Status](https://github.com/kchu25/EpicHyperSketch.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/kchu25/EpicHyperSketch.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/kchu25/EpicHyperSketch.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/kchu25/EpicHyperSketch.jl)
 
-A high-performance GPU-accelerated package for mining enriched motifs from sequential data using Count-Min Sketch probabilistic data structures.
-
-## Overview
-
-EpicHyperSketch efficiently identifies frequently occurring patterns (motifs) in large datasets by:
-- Using probabilistic Count-Min Sketch for memory-efficient counting
-- Supporting both ordinary features and position-aware convolution patterns
-- Leveraging CUDA GPU acceleration for high performance
-- Automatically falling back to CPU when GPU is unavailable
+A high-performance extracting enriched motifs from data using a GPU-accelerated Count-Min Sketch.
 
 ## Installation
 
@@ -96,6 +88,15 @@ println(motifs)
 # Means: Filter 2, gap of 3 positions, then Filter 4
 # Gap = position2 - position1 - filter_len = 7 - 1 - 3 = 3
 ```
+
+## Overview
+
+EpicHyperSketch efficiently identifies frequently occurring patterns (motifs) in large datasets by:
+- Using probabilistic Count-Min Sketch for memory-efficient counting
+- Supporting both ordinary features and position-aware convolution patterns
+- Leveraging CUDA GPU acceleration for high performance
+- Automatically falling back to CPU when GPU is unavailable
+
 
 ## Advanced Configuration
 
