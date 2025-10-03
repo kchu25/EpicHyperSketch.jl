@@ -52,9 +52,9 @@ mutable struct Record
         @info "Generating sketch..."
         cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda)
 
-        selectedCombs = [CUDA.fill(false, 
-            (size(combs, 2), size(vecRefArray[i], 3))) 
-                for i in eachindex(vecRefArray)]
+        selectedCombs = use_cuda ?
+            [CUDA.fill(false, (size(combs, 2), size(vecRefArray[i], 3))) for i in eachindex(vecRefArray)] :
+            [fill(false, (size(combs, 2), size(vecRefArray[i], 3))) for i in eachindex(vecRefArray)]
 
         new(
             vecRefArray,
