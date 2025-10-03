@@ -1,5 +1,3 @@
-
-
 """
     - vecRefArray::Vector{AbstractArray{IntType, 3}}
     Reference arrays on the selected features for each data point
@@ -58,7 +56,16 @@ mutable struct Record
             (size(combs, 2), size(vecRefArray[i], 3))) 
                 for i in eachindex(vecRefArray)]
 
-        new(vecRefArray, combs, cms, selectedCombs, case, IntType(motif_size), IntType(filter_len), use_cuda)
+        new(
+            vecRefArray,
+            combs,
+            cms,
+            selectedCombs,
+            case,
+            IntType(motif_size),
+            !isnothing(filter_len) ? IntType(filter_len) : nothing,
+            use_cuda
+        )
     end
 end
 

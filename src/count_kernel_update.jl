@@ -255,9 +255,6 @@ function obtain_motifs_ordinary!(CindsVec, combs, refArray, motifs_obtained)
 end
 
 
-
-
-
 """
 Data Structure Specifications:
 
@@ -279,3 +276,5 @@ Parameters:
     
 Invariant: combs.rows == hashCoefficients.columns (ordinary case only)
 """
+
+
