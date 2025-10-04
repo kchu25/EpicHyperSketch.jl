@@ -138,7 +138,7 @@ motifs = obtain_enriched_configurations(
 
 ### Ordinary Motifs
 Results are tuples of feature IDs:
-- `(7, 19)` → Feature 7 followed by Feature 19
+- `(7, 19)` → Feature 7 and 19
 
 ### Convolution Motifs  
 Results encode spatial relationships:
