@@ -31,7 +31,7 @@ include("config.jl")
 include("performance.jl")
 include("sketch.jl")
 include("record.jl")
-include("count_kernel_update.jl")
+include("count_gpu.jl")
 include("count_cpu.jl")
 
 
