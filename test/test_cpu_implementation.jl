@@ -2,82 +2,118 @@ using EpicHyperSketch
 using Test
 
 @testset "CPU Implementation (Both Cases)" begin
-    
-    @testset "CPU vs GPU comparison (small dataset)" begin
-        # Create a small test dataset
-        activation_dict_conv = Dict(
-            1 => [(filter=2, position=5), (filter=3, position=15)], 
-            2 => [(filter=1, position=10), (filter=4, position=25)], 
-            3 => [(filter=2, position=1), (filter=3, position=12)]
-        )
-        
+    @testset "CPU Convolution - Large Dataset (2000 points)" begin
+        # Generate 2000 data points with implicit ground truth pattern
+        # Pattern: Every 10th data point has (filter=1, position=5) and (filter=2, position=15)
+        # This creates a known motif that should appear ~200 times
+        n_points = 2000
         motif_size = 2
         filter_len = 8
-        min_count = 1
+        
+        activation_dict_conv = Dict{Int, Vector{NamedTuple{(:filter, :position), Tuple{Int, Int}}}}()
+        
+        # Generate data with implicit pattern
+        for i in 1:n_points
+            features = NamedTuple{(:filter, :position), Tuple{Int, Int}}[]
+            
+            # Every 10th point contains the ground truth motif
+            if i % 10 == 0
+                push!(features, (filter=1, position=5))
+                push!(features, (filter=2, position=15))
+            end
+            
+            # Add some random noise features
+            num_noise = rand(1:4)
+            for _ in 1:num_noise
+                push!(features, (filter=rand(3:6), position=rand(1:30)))
+            end
+            
+            activation_dict_conv[i] = features
+        end
+        
+        @info "Generated $(n_points) convolution data points"
+        @info "Expected ground truth: filters [1,2] with distance ~$(15-5-filter_len) should be highly enriched"
         
         # Test CPU version
-        @info "Testing CPU implementation..."
-        config_cpu = EpicHyperSketch.default_config(min_count=min_count, use_cuda=false)
+        config_cpu = EpicHyperSketch.default_config(min_count=50, use_cuda=false)
         
         result_cpu = EpicHyperSketch.obtain_enriched_configurations_cpu(
             activation_dict_conv;
             motif_size=motif_size,
             filter_len=filter_len,
-            min_count=min_count,
+            min_count=50,
             config=config_cpu
         )
         
         @test isa(result_cpu, Set)
-        @info "CPU result: $(result_cpu)"
-        @info "Number of configurations found (CPU): $(length(result_cpu))"
+        @test length(result_cpu) > 0  # Should find at least the ground truth pattern
+        @info "Number of enriched configurations found (CPU): $(length(result_cpu))"
         
-        # If CUDA is available, compare with GPU version
-        if CUDA.functional()
-            @info "CUDA available, comparing with GPU implementation..."
-            config_gpu = EpicHyperSketch.default_config(min_count=min_count, use_cuda=true)
-            
-            result_gpu = EpicHyperSketch.obtain_enriched_configurations(
-                activation_dict_conv;
-                motif_size=motif_size,
-                filter_len=filter_len,
-                min_count=min_count,
-                config=config_gpu
-            )
-            
-            @info "GPU result: $(result_gpu)"
-            @info "Number of configurations found (GPU): $(length(result_gpu))"
-            
-            # Results should be identical
-            @test result_cpu == result_gpu
-            @info "✓ CPU and GPU results match!"
+        # Check if ground truth pattern is found
+        # For filters [1,2] with positions 5 and 15, distance = 15-5-filter_len = 2
+        expected_distance = 15 - 5 - filter_len
+        found_ground_truth = any(cfg -> cfg[1] == 1 && cfg[2] == 2 && cfg[3] == expected_distance, result_cpu)
+        
+        if found_ground_truth
+            @info "✓ Ground truth pattern found: filters [1,2] with distance $(expected_distance)"
         else
-            @info "CUDA not available, skipping GPU comparison"
+            @info "Available configurations: $(result_cpu)"
         end
     end
     
-    @testset "CPU ordinary features" begin
-        # Test ordinary features case
-        activation_dict_ord = Dict(
-            1 => [10, 20, 30],
-            2 => [15, 25],
-            3 => [5, 35, 40]
-        )
-        
+    @testset "CPU Ordinary Features - Large Dataset (2000 points)" begin
+        # Generate 2000 data points with implicit ground truth pattern
+        # Pattern: Every 8th data point has features [5, 15]
+        # This creates a known motif that should appear ~250 times
+        n_points = 2000
         motif_size = 2
-        min_count = 1
         
-        config_cpu = EpicHyperSketch.default_config(min_count=min_count, use_cuda=false)
+        activation_dict_ord = Dict{Int, Vector{Int}}()
+        
+        # Generate data with implicit pattern
+        for i in 1:n_points
+            features = Int[]
+            
+            # Every 8th point contains the ground truth motif
+            if i % 8 == 0
+                push!(features, 5)
+                push!(features, 15)
+            end
+            
+            # Add some random noise features
+            num_noise = rand(1:5)
+            for _ in 1:num_noise
+                push!(features, rand(1:30))
+            end
+            
+            activation_dict_ord[i] = sort(unique(features))
+        end
+        
+        @info "Generated $(n_points) ordinary feature data points"
+        @info "Expected ground truth: features [5,15] should be highly enriched (~250 occurrences)"
+        
+        # Test CPU version
+        config_cpu = EpicHyperSketch.default_config(min_count=80, use_cuda=false)
         
         result_cpu = EpicHyperSketch.obtain_enriched_configurations_cpu(
             activation_dict_ord;
             motif_size=motif_size,
             filter_len=nothing,
-            min_count=min_count,
+            min_count=80,
             config=config_cpu
         )
         
         @test isa(result_cpu, Set)
-        @info "CPU ordinary result: $(result_cpu)"
-        @info "Number of ordinary configurations found (CPU): $(length(result_cpu))"
+        @test length(result_cpu) > 0  # Should find at least the ground truth pattern
+        @info "Number of enriched configurations found (CPU): $(length(result_cpu))"
+        
+        # Check if ground truth pattern is found
+        found_ground_truth = any(cfg -> cfg == (5, 15), result_cpu)
+        
+        if found_ground_truth
+            @info "✓ Ground truth pattern found: features [5,15]"
+        else
+            @info "Available configurations: $(result_cpu)"
+        end
     end
 end

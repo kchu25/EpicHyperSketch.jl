@@ -4,7 +4,7 @@ using IterTools
 using Random
 
 # include("test_config_errors.jl")# Large tests with CPU backend
-# include("test_cpu_implementation.jl")
+include("test_cpu_implementation.jl")
 
 """
 # Full GPU tests  
