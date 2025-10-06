@@ -164,8 +164,10 @@ function obtain_enriched_configurations(
     #         println("Selected combination: ", comb)
     #     end
     # end
+    
+    motifs = _obtain_enriched_configurations_(r, config)
 
-    return _obtain_enriched_configurations_(r, config)
+    return motifs
 end
 
 export CountMinSketch, 
