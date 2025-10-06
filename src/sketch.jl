@@ -26,7 +26,7 @@ end
 
 
 """
-    CountMinSketch(motif_size::Integer; delta, epsilon, use_cuda)
+    CountMinSketch(motif_size::Integer; delta, epsilon, use_cuda, seed)
 
 Create a CountMinSketch object.
 
@@ -34,6 +34,7 @@ Create a CountMinSketch object.
 - delta: Error probability.
 - epsilon: Error tolerance.
 - use_cuda: If true, use CUDA arrays.
+- seed: Random seed for reproducibility (optional).
 """
 mutable struct CountMinSketch
     hash_coeffs::AbstractMatrix{IntType}
@@ -44,7 +45,8 @@ mutable struct CountMinSketch
         delta=DEFAULT_CMS_DELTA, 
         epsilon=DEFAULT_CMS_EPSILON, 
         case::Symbol=:OrdinaryFeatures,
-        use_cuda::Bool=true
+        use_cuda::Bool=true,
+        seed::Union{Int, Nothing}=nothing
     )
         @assert motif_size > 0 "motif_size must be a positive integer"
         @assert 0 < delta < 1 "delta must be in (0, 1)"
@@ -57,6 +59,12 @@ mutable struct CountMinSketch
         sketch = zeros(IntType, rows, cols)
 
         num_hash_cols = num_hash_columns(motif_size, case)
+        
+        # Set seed if provided for reproducibility
+        if seed !== nothing
+            Random.seed!(seed)
+        end
+        
         rand_matrix = rand(1:num_counters-1, (rows, num_hash_cols))
         hash_coeffs = IntType.(rand_matrix)
 

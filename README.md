@@ -134,6 +134,29 @@ motifs = obtain_enriched_configurations(
 )
 ```
 
+### Reproducible Results
+```julia
+# Set a seed for reproducible hash coefficients in Count-Min Sketch
+config_reproducible = HyperSketchConfig(seed = 42)
+
+motifs1 = obtain_enriched_configurations(
+    activation_dict;
+    motif_size = 2,
+    min_count = 2,
+    config = config_reproducible
+)
+
+# Running again with same seed produces identical results
+motifs2 = obtain_enriched_configurations(
+    activation_dict;
+    motif_size = 2,
+    min_count = 2,
+    config = config_reproducible
+)
+
+@assert motifs1 == motifs2  # Same results with same seed
+```
+
 ## Understanding Results
 
 ### Ordinary Motifs
@@ -182,7 +205,8 @@ HyperSketchConfig(;
     batch_size=500,
     threads_2d=(32,32),
     delta=0.0001,
-    epsilon=0.00005
+    epsilon=0.00005,
+    seed=nothing  # Set to an integer for reproducible results
 )
 ```
 ## Speed comparison

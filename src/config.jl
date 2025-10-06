@@ -17,14 +17,17 @@ Base.@kwdef struct HyperSketchConfig
     threads_1d::Tuple{Int} = (128,)
     threads_2d::Tuple{Int,Int} = (24, 24)
     threads_3d::Tuple{Int,Int,Int} = (8, 8, 8)
+    
+    # Reproducibility
+    seed::Union{Int, Nothing} = nothing
 
     # Validation
-    function HyperSketchConfig(delta, epsilon, min_count, batch_size, use_cuda, threads_1d, threads_2d, threads_3d)
+    function HyperSketchConfig(delta, epsilon, min_count, batch_size, use_cuda, threads_1d, threads_2d, threads_3d, seed)
         validate_probability(delta, "delta")
         validate_probability(epsilon, "epsilon") 
         validate_min_count(min_count)
         @assert batch_size > 0 "batch_size must be positive"
-        new(delta, epsilon, min_count, batch_size, use_cuda, threads_1d, threads_2d, threads_3d)
+        new(delta, epsilon, min_count, batch_size, use_cuda, threads_1d, threads_2d, threads_3d, seed)
     end
 end
 

@@ -33,7 +33,8 @@ mutable struct Record
         motif_size::Integer;
         batch_size=BATCH_SIZE,
         use_cuda::Bool=true,
-        filter_len::Union{Integer, Nothing}=nothing
+        filter_len::Union{Integer, Nothing}=nothing,
+        seed::Union{Int, Nothing}=nothing
         ) where {T <: Integer, S}
 
         # preprocess the activation_dict
@@ -50,7 +51,7 @@ mutable struct Record
         vecRefArray = constructVecRefArrays(activation_dict, max_active_len; 
             batch_size=batch_size, case=case, use_cuda=use_cuda)
         @info "Generating sketch..."
-        cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda)
+        cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda, seed=seed)
 
         selectedCombs = use_cuda ?
             [CUDA.fill(false, (size(combs, 2), size(vecRefArray[i], 3))) for i in eachindex(vecRefArray)] :

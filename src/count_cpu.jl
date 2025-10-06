@@ -325,7 +325,9 @@ function obtain_enriched_configurations_cpu(
     motif_size::Integer=3,
     filter_len::Union{Integer,Nothing}=nothing,
     min_count::Integer=1, 
-    config::HyperSketchConfig=default_config(min_count=min_count, use_cuda=false)
+    seed::Union{Integer, Nothing}=1,
+    config::HyperSketchConfig=default_config(min_count=min_count,
+        use_cuda=false, seed=seed)
 )
     # Validation
     validate_activation_dict(activation_dict)
@@ -340,14 +342,16 @@ function obtain_enriched_configurations_cpu(
         use_cuda=false,  # Force CPU
         threads_1d=config.threads_1d,
         threads_2d=config.threads_2d,
-        threads_3d=config.threads_3d
+        threads_3d=config.threads_3d,
+        seed=config.seed  # Preserve seed for reproducibility
     )
     
     @info "Constructing Record (CPU mode)..."
     r = Record(activation_dict, motif_size; 
                batch_size=config.batch_size,
                use_cuda=false,  # Force CPU arrays
-               filter_len=filter_len)
+               filter_len=filter_len,
+               seed=config.seed)
 
     @info "Starting CPU counting..."
     count_cpu!(r, config)

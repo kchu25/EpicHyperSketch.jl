@@ -2,6 +2,7 @@ module EpicHyperSketch
 
 using CUDA
 using Combinatorics
+using Random
 #
 
 const IntType = Int32 # RTX 3090 has dedicated INT32 execution units in each SM 
@@ -132,7 +133,8 @@ function obtain_enriched_configurations(
     motif_size::Integer=3,
     filter_len::Union{Integer,Nothing}=nothing,
     min_count::Integer=1, 
-    config::HyperSketchConfig=default_config(min_count=min_count)
+    seed::Union{Integer, Nothing}=1,
+    config::HyperSketchConfig=default_config(min_count=min_count, seed=seed)
 )
     # Validation
     validate_activation_dict(activation_dict)
@@ -144,7 +146,8 @@ function obtain_enriched_configurations(
     r = Record(activation_dict, motif_size; 
                batch_size=config.batch_size,
                use_cuda=config.use_cuda, 
-               filter_len=filter_len)
+               filter_len=filter_len,
+               seed=config.seed)
 
     @info "Starting to count..."
     # Execute pipeline
@@ -164,7 +167,7 @@ function obtain_enriched_configurations(
     #         println("Selected combination: ", comb)
     #     end
     # end
-    
+
     motifs = _obtain_enriched_configurations_(r, config)
 
     return motifs
