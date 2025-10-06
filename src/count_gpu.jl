@@ -34,12 +34,12 @@ Calculate hash index for convolution method, including position distances.
 Returns -1 if filters overlap (invalid combination).
 """
 function calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, sketch_row_ind, n, num_rows_combs, filter_len)
-    sketch_col_index = Int32(0)
+    sketch_col_index = IntType(0)
     @inbounds for elem_idx in 1:num_rows_combs
         comb_index_value = combs[elem_idx, comb_col_ind]
         # Guard against invalid comb index
         if comb_index_value == 0 || comb_index_value > size(refArray,1)
-            return Int32(-1)
+            return IntType(-1)
         end
         filter_index = refArray[comb_index_value, FILTER_INDEX_COLUMN, n]
         hash_coeff = hashCoefficients[sketch_row_ind, 2*(elem_idx-1)+1]
@@ -49,14 +49,14 @@ function calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, sk
             next_comb_index_value = combs[elem_idx+1, comb_col_ind]
             # Guard against invalid next index
             if next_comb_index_value == 0 || next_comb_index_value > size(refArray,1)
-                return Int32(-1)
+                return IntType(-1)
             end
             position1 = refArray[comb_index_value, POSITION_COLUMN, n]
             position2 = refArray[next_comb_index_value, POSITION_COLUMN, n]
             distance = position2 - position1 - filter_len
 
             if distance < 0  # overlapping filters
-                return Int32(-1)  # signal invalid
+                return IntType(-1)  # signal invalid
             end
 
             sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * distance
@@ -106,7 +106,7 @@ function _kernel_setup_and_bounds_check(combs, refArray, sketch)
     sketch_row_ind = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     n = (blockIdx().z - 1) * blockDim().z + threadIdx().z
     
-    num_rows_combs, num_cols_combs = size(combs)
+    _, num_cols_combs = size(combs)
     num_rows_sketch, num_cols_sketch = size(sketch)
     num_counters = num_rows_sketch * num_cols_sketch
     
