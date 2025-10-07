@@ -25,7 +25,8 @@ RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
         epsilon = 0.0001
         use_cuda = false
         cms = EpicHyperSketch.CountMinSketch(
-            motif_size; delta=delta, epsilon=epsilon, use_cuda=use_cuda)
+            motif_size; delta=delta, epsilon=epsilon, 
+                use_cuda=use_cuda)
 
         println("hash_coeffs size: ", size(cms.hash_coeffs))
         println("sketch size: ", size(cms.sketch))
@@ -42,11 +43,11 @@ RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
 
 
     activation_dict = Dict(
-         1=>[(filter=2, position=5), (filter=2, position=10), (filter=3, position=15)], 
-         2=>[(filter=1, position=15), (filter=3, position=25)], 
-         3=>[(filter=2, position=1), (filter=2, position=6), (filter=3, position=12)],
-         4=>[(filter=1, position=3), (filter=2, position=8), (filter=4, position=20)],
-         5=>[(filter=3, position=7), (filter=4, position=14)],
+         1=>[(filter=2, contribution=1.0f0, position=5), (filter=2, contribution=1.0f0, position=10), (filter=3, contribution=1.0f0, position=15)], 
+         2=>[(filter=1, contribution=1.0f0, position=15), (filter=3, contribution=1.0f0, position=25)], 
+         3=>[(filter=2, contribution=1.0f0, position=1), (filter=2, contribution=1.0f0, position=6), (filter=3, contribution=1.0f0, position=12)],
+         4=>[(filter=1, contribution=1.0f0, position=3), (filter=2, contribution=1.0f0, position=8), (filter=4, contribution=1.0f0, position=20)],
+         5=>[(filter=3, contribution=1.0f0, position=7), (filter=4, contribution=1.0f0, position=14)],
         )
 
     @testset "Record construction test set 1" begin

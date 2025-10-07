@@ -10,22 +10,22 @@ using Test
         motif_size = 2
         filter_len = 8
         
-        activation_dict_conv = Dict{Int, Vector{NamedTuple{(:filter, :position), Tuple{Int, Int}}}}()
+        activation_dict_conv = Dict{Int, Vector{EpicHyperSketch.ConvolutionFeature}}()
         
         # Generate data with implicit pattern
         for i in 1:n_points
-            features = NamedTuple{(:filter, :position), Tuple{Int, Int}}[]
+            features = EpicHyperSketch.ConvolutionFeature[]
             
             # Every 10th point contains the ground truth motif
             if i % 10 == 0
-                push!(features, (filter=1, position=5))
-                push!(features, (filter=2, position=15))
+                push!(features, (filter=1, contribution=1.0f0, position=5))
+                push!(features, (filter=2, contribution=1.0f0, position=15))
             end
             
             # Add some random noise features
             num_noise = rand(1:4)
             for _ in 1:num_noise
-                push!(features, (filter=rand(3:6), position=rand(1:30)))
+                push!(features, (filter=rand(3:6), contribution=rand(Float32), position=rand(1:30)))
             end
             
             activation_dict_conv[i] = features
@@ -68,25 +68,30 @@ using Test
         n_points = 2000
         motif_size = 2
         
-        activation_dict_ord = Dict{Int, Vector{Int}}()
+        activation_dict_ord = Dict{Int, Vector{EpicHyperSketch.OrdinaryFeature}}()
         
         # Generate data with implicit pattern
         for i in 1:n_points
-            features = Int[]
+            features = EpicHyperSketch.OrdinaryFeature[]
             
             # Every 8th point contains the ground truth motif
             if i % 8 == 0
-                push!(features, 5)
-                push!(features, 15)
+                push!(features, (feature=5, contribution=1.0f0))
+                push!(features, (feature=15, contribution=1.0f0))
             end
             
             # Add some random noise features
             num_noise = rand(1:5)
             for _ in 1:num_noise
-                push!(features, rand(1:30))
+                push!(features, (feature=rand(1:30), contribution=rand(Float32)))
             end
             
-            activation_dict_ord[i] = sort(unique(features))
+            # Sort by feature ID and aggregate contributions for duplicates
+            unique_features = Dict{Int, Float32}()
+            for feat in features
+                unique_features[feat.feature] = get(unique_features, feat.feature, 0.0f0) + feat.contribution
+            end
+            activation_dict_ord[i] = [(feature=k, contribution=v) for (k, v) in sort(collect(unique_features))]
         end
         
         @info "Generated $(n_points) ordinary feature data points"

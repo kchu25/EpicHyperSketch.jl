@@ -18,20 +18,22 @@ using Test
     
     @testset "Activation dictionary validation" begin
         # Valid dictionaries
-        ordinary_dict = Dict(1 => [10, 20], 2 => [15, 25])
-        conv_dict = Dict(1 => [(filter=1, position=5)], 2 => [(filter=2, position=10)])
+        ordinary_dict = Dict(1 => [(feature=10, contribution=1.0f0), (feature=20, contribution=0.5f0)], 
+                           2 => [(feature=15, contribution=0.8f0), (feature=25, contribution=1.2f0)])
+        conv_dict = Dict(1 => [(filter=1, position=5, contribution=1.0f0)], 
+                        2 => [(filter=2, position=10, contribution=0.9f0)])
         
         @test_nowarn EpicHyperSketch.validate_activation_dict(ordinary_dict)
         @test_nowarn EpicHyperSketch.validate_activation_dict(conv_dict)
         
         # Invalid dictionaries
-        empty_dict = Dict{Int, Vector{Int}}()
+        empty_dict = Dict{Int, Vector{EpicHyperSketch.OrdinaryFeature}}()
         @test_throws EpicHyperSketch.InvalidConfigurationError EpicHyperSketch.validate_activation_dict(empty_dict)
     end
     
     @testset "Type definitions" begin
-        @test EpicHyperSketch.OrdinaryFeature == Int
-        @test EpicHyperSketch.ConvolutionFeature == NamedTuple{(:filter, :position), Tuple{Int, Int}}
+        @test EpicHyperSketch.OrdinaryFeature == NamedTuple{(:feature, :contribution), Tuple{Int, EpicHyperSketch.FloatType}}
+        @test EpicHyperSketch.ConvolutionFeature == NamedTuple{(:filter, :position, :contribution), Tuple{Int, Int, EpicHyperSketch.FloatType}}
         
         # Enum conversions
         @test EpicHyperSketch.symbol_to_case(:OrdinaryFeatures) == EpicHyperSketch.OrdinaryFeatures

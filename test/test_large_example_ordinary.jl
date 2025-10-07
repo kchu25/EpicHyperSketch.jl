@@ -3,6 +3,11 @@ using Random
 using Combinatorics  # For combinations function
 using CUDA  # For CUDA.functional() check
 
+# Helper function to convert integers to OrdinaryFeature format
+function make_features(feature_ids::Vector{Int})
+    return [(feature=id, contribution=1.0f0) for id in feature_ids]
+end
+
 """
 Create a large test ActivationDict with known ground truth motifs.
 This example has 750 sequences (> BATCH_SIZE = 500) with controlled motif patterns.
@@ -16,29 +21,29 @@ Ground Truth for motif_size = 3:
 """
 function create_large_test_dict()
     Random.seed!(42)  # For reproducibility
-    activation_dict = Dict{Int, Vector{Int}}()
+    activation_dict = Dict{Int, Vector{EpicHyperSketch.OrdinaryFeature}}()
     
     # Insert motif [7,19,42] exactly 25 times - mix consecutive and scattered
     for i in 1:25
         if i <= 8
             # Consecutive at beginning
-            activation_dict[i] = [7, 19, 42, rand(100:150, rand(2:5))...]
+            activation_dict[i] = make_features([7, 19, 42, rand(100:150, rand(2:5))...])
         elseif i <= 16
             # Scattered in sequence (elements present but not consecutive)
             filler1 = rand(100:150, rand(1:2))
             filler2 = rand(100:150, rand(1:2)) 
             filler3 = rand(100:150, rand(1:3))
-            activation_dict[i] = [filler1..., 7, filler2..., 19, filler3..., 42, rand(100:150, rand(1:2))...]
+            activation_dict[i] = make_features([filler1..., 7, filler2..., 19, filler3..., 42, rand(100:150, rand(1:2))...])
         elseif i <= 20
             # In middle (consecutive)
-            activation_dict[i] = [rand(100:150, rand(1:3))..., 7, 19, 42, rand(100:150, rand(1:3))...]
+            activation_dict[i] = make_features([rand(100:150, rand(1:3))..., 7, 19, 42, rand(100:150, rand(1:3))...])
         else
             # Mixed: some consecutive, some scattered
             if rand() < 0.5
-                activation_dict[i] = [rand(100:150, rand(2:5))..., 7, 19, 42]
+                activation_dict[i] = make_features([rand(100:150, rand(2:5))..., 7, 19, 42])
             else
                 # Scattered version
-                activation_dict[i] = [7, rand(100:150, 2)..., 19, rand(100:150, 1)..., 42]
+                activation_dict[i] = make_features([7, rand(100:150, 2)..., 19, rand(100:150, 1)..., 42])
             end
         end
     end
@@ -47,31 +52,31 @@ function create_large_test_dict()
     for i in 26:40
         if i <= 31
             # Consecutive
-            activation_dict[i] = [rand(200:250, rand(1:3))..., 13, 28, 55, rand(200:250, rand(1:4))...]
+            activation_dict[i] = make_features([rand(200:250, rand(1:3))..., 13, 28, 55, rand(200:250, rand(1:4))...])
         else
             # Scattered
             filler = rand(200:250, rand(1:3))
-            activation_dict[i] = [13, filler..., 28, rand(200:250, rand(1:2))..., 55, rand(200:250, rand(1:2))...]
+            activation_dict[i] = make_features([13, filler..., 28, rand(200:250, rand(1:2))..., 55, rand(200:250, rand(1:2))...])
         end
     end
     
     # Insert motif [3,41,67] exactly 8 times
     for i in 41:48
         if i <= 44
-            activation_dict[i] = [3, 41, 67, rand(300:350, rand(2:6))...]
+            activation_dict[i] = make_features([3, 41, 67, rand(300:350, rand(2:6))...])
         else
             # Scattered
-            activation_dict[i] = [3, rand(300:350, rand(2:4))..., 41, rand(300:350, 1)..., 67]
+            activation_dict[i] = make_features([3, rand(300:350, rand(2:4))..., 41, rand(300:350, 1)..., 67])
         end
     end
     
     # Insert motif [22,8,39] exactly 12 times
     for i in 49:60
         if i <= 54
-            activation_dict[i] = [rand(400:450, rand(1:2))..., 22, 8, 39, rand(400:450, rand(1:3))...]
+            activation_dict[i] = make_features([rand(400:450, rand(1:2))..., 22, 8, 39, rand(400:450, rand(1:3))...])
         else
             # Scattered
-            activation_dict[i] = [22, rand(400:450, rand(1:3))..., 8, rand(400:450, rand(1:2))..., 39, rand(400:450, rand(1:2))...]
+            activation_dict[i] = make_features([22, rand(400:450, rand(1:3))..., 8, rand(400:450, rand(1:2))..., 39, rand(400:450, rand(1:2))...])
         end
     end
     
@@ -79,7 +84,7 @@ function create_large_test_dict()
     for i in 61:600
         # Random sequences with length 3-8, using values 500-600 to avoid accidental motifs
         seq_length = rand(3:8)
-        activation_dict[i] = rand(500:600, seq_length)
+        activation_dict[i] = make_features(rand(500:600, seq_length))
     end
     
     # Add sequences 601-700 with some overlapping elements but no complete motifs
@@ -87,19 +92,19 @@ function create_large_test_dict()
         # These might have 1 or 2 elements from our motifs, but not complete triplets
         base_elements = rand([7, 19, 13, 28, 3, 41, 22, 8], rand(1:2))
         filler = rand(700:800, rand(3:6))
-        activation_dict[i] = [base_elements..., filler...]
+        activation_dict[i] = make_features([base_elements..., filler...])
     end
     
     # Add sequences 701-750 with some empty and short sequences
     for i in 701:750
         if i <= 710
-            activation_dict[i] = Int[]  # Empty sequences
+            activation_dict[i] = EpicHyperSketch.OrdinaryFeature[]  # Empty sequences
         elseif i <= 720
-            activation_dict[i] = [rand(900:1000)]  # Single elements
+            activation_dict[i] = make_features([rand(900:1000)])  # Single elements
         elseif i <= 730
-            activation_dict[i] = [rand(900:1000), rand(900:1000)]  # Pairs
+            activation_dict[i] = make_features([rand(900:1000), rand(900:1000)])  # Pairs
         else
-            activation_dict[i] = rand(900:1000, rand(3:5))  # Regular random sequences
+            activation_dict[i] = make_features(rand(900:1000, rand(3:5)))  # Regular random sequences
         end
     end
     
@@ -114,10 +119,12 @@ function verify_ground_truth(activation_dict, motif_size=3; check_subsets=true)
 
     for (seq_id, sequence) in activation_dict
         if length(sequence) >= motif_size
+            # Extract feature IDs from NamedTuples
+            feature_ids = [feat.feature for feat in sequence]
 
             # Count subset-based motifs (all combinations of motif_size elements)
             if check_subsets
-                unique_seq = unique(sequence)
+                unique_seq = unique(feature_ids)
                 if length(unique_seq) >= motif_size
                     for combo in combinations(unique_seq, motif_size)
                         motif_set = Set(combo)

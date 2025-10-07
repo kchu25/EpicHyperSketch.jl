@@ -7,8 +7,9 @@ const HashMatrix = AbstractMatrix{IntType}
 const SketchMatrix = AbstractMatrix{IntType}
 
 # Feature types
-const OrdinaryFeature = Int
-const ConvolutionFeature = NamedTuple{(:filter, :position), Tuple{Int, Int}}
+const OrdinaryFeature = NamedTuple{(:feature, :contribution), Tuple{Int, FloatType}}
+const ConvolutionFeature = NamedTuple{(:filter, :contribution, :position), Tuple{Int, FloatType, Int}}
+# TODO: Int can be UInt; can use less space
 
 # Enum for processing cases
 @enum ProcessingCase OrdinaryFeatures=1 Convolution=2
