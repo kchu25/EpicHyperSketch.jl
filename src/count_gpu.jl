@@ -258,6 +258,11 @@ end
 """
 Data Structure Specifications:
 
+refArray: (max_num_active x 2 x batch_size) 3D array
+    - Rows: number of active filters/features for a sequence
+    - 2 Columns: [filter/feature ID, position in sequence]
+    - Depth: batch size (number of sequences in current batch)
+
 hashCoefficients: (num_hash_functions x "motif_size") matrix
     - Rows: number of hash functions (equals sketch height)
     - Columns: motif_size (ordinary) or 2 x motif_size - 1 (convolution)

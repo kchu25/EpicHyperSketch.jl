@@ -122,6 +122,7 @@ function constructVecRefArrays(
     sizes = fill(batch_size, num_batches - 1)
     last_batch_size > 0 && push!(sizes, last_batch_size)
     vecRefArray = [zeros(IntType, (max_active_len, refArraysSecondDim[case], sz)) for sz in sizes]
+    # each vecRefArray[i] is a 3D array of size (max_active_len, 1 or 2, batch_size) 
 
     for (index, data_pt_index) in enumerate(keys(activation_dict))
         batch_index = div(index - 1, batch_size) + 1
