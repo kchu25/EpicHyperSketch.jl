@@ -13,6 +13,8 @@
 mutable struct Record
     # Reference arrays on the selected features for each data point
     vecRefArray::Vector{AbstractArray{IntType, 3}}
+    # Reference arrays for contributions
+    vecRefArrayContrib::Vector{AbstractArray{FloatType, 2}}
     # combinations, store each combination horizontally
     combs::AbstractArray{IntType, 2}
     # count-min sketch
@@ -48,7 +50,7 @@ mutable struct Record
         @info "Generating combinations and constructing reference arrays..."
         # generate combinations
         combs = generate_combinations(motif_size, max_active_len; use_cuda=use_cuda)
-        vecRefArray = constructVecRefArrays(activation_dict, max_active_len; 
+        vecRefArray, vecRefArrayContrib = constructVecRefArrays(activation_dict, max_active_len; 
             batch_size=batch_size, case=case, use_cuda=use_cuda)
         @info "Generating sketch..."
         cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda, seed=seed)
@@ -59,6 +61,7 @@ mutable struct Record
 
         new(
             vecRefArray,
+            vecRefArrayContrib,
             combs,
             cms,
             selectedCombs,
@@ -122,6 +125,7 @@ function constructVecRefArrays(
     sizes = fill(batch_size, num_batches - 1)
     last_batch_size > 0 && push!(sizes, last_batch_size)
     vecRefArray = [zeros(IntType, (max_active_len, refArraysDim[case], sz)) for sz in sizes]
+    vecRefArrayContrib = [zeros(FloatType, (max_active_len, sz)) for sz in sizes]
     # each vecRefArray[i] is a 3D array of size (max_active_len, 1 or 2, batch_size) 
 
     for (index, data_pt_index) in enumerate(keys(activation_dict))
@@ -132,11 +136,13 @@ function constructVecRefArrays(
         if case == :OrdinaryFeatures
             for (i, feat) in enumerate(features)
                 vecRefArray[batch_index][i, 1, within_batch_index] = convert(IntType, feat.feature)
+                vecRefArrayContrib[batch_index][i, within_batch_index] = convert(FloatType, feat.contribution)
             end
         elseif case == :Convolution
             for (i, feat) in enumerate(features)
                 vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.filter)
                 vecRefArray[batch_index][i, POSITION_COLUMN, within_batch_index] = convert(IntType, feat.position)
+                vecRefArrayContrib[batch_index][i, within_batch_index] = convert(FloatType, feat.contribution)
             end
         else
             error("Unsupported case: $case")
@@ -145,8 +151,9 @@ function constructVecRefArrays(
 
     if use_cuda
         vecRefArray = CuArray.(vecRefArray)
+        vecRefArrayContrib = CuArray.(vecRefArrayContrib)
     end
-    return vecRefArray
+    return vecRefArray, vecRefArrayContrib
 end
 
 """

@@ -69,7 +69,7 @@ RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
         @test case == :Convolution
         max_active_len = E.get_max_active_len(activation_dict)
         @test max_active_len == 3
-        vecRefArray = E.constructVecRefArrays(activation_dict, max_active_len; 
+        vecRefArray, vecRefArrayContrib = E.constructVecRefArrays(activation_dict, max_active_len; 
                 batch_size=batch_size, case=case, use_cuda=use_cuda)
         @test length(vecRefArray) == 3  # number of batches
         @test size(vecRefArray[1]) == (3, 2, 2)
