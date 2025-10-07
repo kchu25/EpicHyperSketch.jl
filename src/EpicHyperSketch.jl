@@ -3,6 +3,7 @@ module EpicHyperSketch
 using CUDA
 using Combinatorics
 using Random
+using DataFrames
 #
 
 const IntType = Int32 # RTX 3090 has dedicated INT32 execution units in each SM 
@@ -124,7 +125,12 @@ function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketc
         data_index = reduce(vcat, data_index_vec)
         contribs = reduce(vcat, contribution_vec)
 
-
+        # Create DataFrame for ordinary features
+        # Column names: m1, m2, ..., m{motif_size}, data_index, contribution
+        motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
+        df_data = hcat(Array(motifs_obtained), Array(data_index), Array(contribs))
+        col_names = [motif_cols..., :data_index, :contribution]
+        result_df = DataFrame(df_data, col_names)
 
     elseif r.case == :Convolution
         @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
@@ -159,9 +165,21 @@ function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketc
         data_index = reduce(vcat, data_index_vec)
         contribs = reduce(vcat, contribution_vec)
 
+        # Create DataFrame for convolution features
+        # Column names: m1, m2, ..., m{motif_size}, d12, d23, ..., d{motif_size-1 motif_size}, start, end, data_index, contribution
+        motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
+        distance_cols = [Symbol("d$(i)$(i+1)") for i in 1:(r.motif_size-1)]
+        position_cols = [:start, :end]
+        
+        df_data = hcat(Array(motifs_obtained), Array(distances_obtained), Array(positions_obtained), Array(data_index), Array(contribs))
+        col_names = [motif_cols..., distance_cols..., position_cols..., :data_index, :contribution]
+        result_df = DataFrame(df_data, col_names)
+
     else
         error("Unsupported case: $(r.case)")
     end
+    
+    return result_df
 end
 
 function _obtain_enriched_configurations_(r::Record, config::HyperSketchConfig)
@@ -182,9 +200,9 @@ function _obtain_enriched_configurations_(r::Record, config::HyperSketchConfig)
         # end
     end
 
+    result_df = _launch_config_kernels(r, where_exceeds_vec, config)
 
-
-    return reduce(union, enriched_motifs)
+    return result_df
 end
 
 
