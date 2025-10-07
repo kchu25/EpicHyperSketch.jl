@@ -2,6 +2,7 @@ using EpicHyperSketch
 using Random
 using Combinatorics  # For combinations function
 using CUDA  # For CUDA.functional() check
+using DataFrames  # For DataFrame output
 
 # Helper function to convert integers to OrdinaryFeature format
 function make_features(feature_ids::Vector{Int})
@@ -211,12 +212,22 @@ function test_large_example_ordinary(; use_gpu=true, min_counts=[5, 8, 10, 15])
         println("\n--- Testing with min_count = $min_count ---")
         
         config = default_config(min_count=min_count, use_cuda=use_gpu)
-        result = obtain_enriched_configurations(test_dict; 
-                                              motif_size=3, 
-                                              config=config)
         
-        println("Found $(length(result)) enriched motifs:")
-        for (i, motif) in enumerate(collect(result))
+        # Use appropriate function based on backend
+        if use_gpu
+            result = obtain_enriched_configurations(test_dict; 
+                                                  motif_size=3, 
+                                                  config=config)
+        else
+            result = obtain_enriched_configurations_cpu(test_dict; 
+                                                       motif_size=3, 
+                                                       config=config)
+        end
+        
+        println("Found $(nrow(result)) enriched motifs:")
+        for (i, row) in enumerate(eachrow(result))
+            # Extract motif columns (m1, m2, m3)
+            motif = [row.m1, row.m2, row.m3]
             # Check both consecutive and subset counts
             subset_count = get(subset_counts, Set(motif), 0)
             println("$i. $motif (subset: $subset_count)")
@@ -237,7 +248,9 @@ function test_large_example_ordinary(; use_gpu=true, min_counts=[5, 8, 10, 15])
         missing_expected = []
         
         for expected in expected_motifs_for_threshold
-            if any(Set(collect(found_motif)) == expected for found_motif in result)
+            if any(eachrow(result)) do row
+                Set([row.m1, row.m2, row.m3]) == expected
+            end
                 found_expected += 1
             else
                 missing_expected = [missing_expected..., expected]
@@ -261,7 +274,7 @@ end
 CPU-only version for CI/testing environments without GPU.
 """
 function test_large_example_cpu()
-    return test_large_example(use_gpu=false, min_counts=[8, 15])  # Fewer tests for CI
+    return test_large_example_ordinary(use_gpu=false, min_counts=[8, 15])  # Fewer tests for CI
 end
 
 # Run the test if this file is executed directly
@@ -269,7 +282,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # Check environment variable to determine which test to run
     use_gpu = get(ENV, "EPIC_HYPERSKETCH_GPU_TESTS", "false") == "true"
     if use_gpu
-        test_large_example()  # Full GPU test
+        test_large_example_ordinary()  # Full GPU test
     else
         test_large_example_cpu()  # CPU-only test
     end

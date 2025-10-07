@@ -1,6 +1,45 @@
 # CPU implementations for both convolution and ordinary case counting
 # These functions replicate the GPU kernel logic for CPU execution
 
+using DataFrames
+
+# Helper to create DataFrame for ordinary features (CPU version)
+function _create_ordinary_dataframe_cpu(motifs, data_index, contribs, motif_size)
+    motif_cols = [Symbol("m$i") for i in 1:motif_size]
+    
+    # Create DataFrame column by column to preserve types
+    df = DataFrame()
+    for i in 1:motif_size
+        df[!, motif_cols[i]] = motifs[:, i]
+    end
+    df[!, :data_index] = data_index
+    df[!, :contribution] = contribs
+    
+    return df
+end
+
+# Helper to create DataFrame for convolution features (CPU version)
+function _create_convolution_dataframe_cpu(motifs, distances, positions, data_index, contribs, motif_size)
+    motif_cols = [Symbol("m$i") for i in 1:motif_size]
+    distance_cols = [Symbol("d$(i)$(i+1)") for i in 1:(motif_size-1)]
+    position_cols = [:start, :end]
+    
+    # Create DataFrame column by column to preserve types
+    df = DataFrame()
+    for i in 1:motif_size
+        df[!, motif_cols[i]] = motifs[:, i]
+    end
+    for i in 1:(motif_size-1)
+        df[!, distance_cols[i]] = distances[:, i]
+    end
+    df[!, :start] = positions[:, 1]
+    df[!, :end] = positions[:, 2]
+    df[!, :data_index] = data_index
+    df[!, :contribution] = contribs
+    
+    return df
+end
+
 """
 CPU version: Check if all filters/features in a combination are present (non-zero) in refArray.
 """
@@ -223,35 +262,67 @@ function make_selection_ordinary_cpu!(r::Record, config::HyperSketchConfig)
 end
 
 """
-CPU version: Extract configurations for convolution case - filter IDs and inter-filter distances.
+CPU version: Extract configurations for convolution case - filter IDs, distances, positions, data_index, contributions.
+Returns matrices: motifs, distances, positions, data_index, contribs.
 """
-function obtain_motifs_conv_cpu!(where_exceeds, combs, refArray, motifs_obtained, filter_len)
+function obtain_motifs_conv_cpu!(where_exceeds, combs, refArray, refArrayContrib, motifs_obtained, distances_obtained, 
+                                  positions_obtained, data_index, contribs, filter_len, offset)
     for i in 1:length(where_exceeds)
         comb_idx, n = where_exceeds[i][1], where_exceeds[i][2]  # combination index, batch index
         K = size(combs, 1)
         
+        # Store data_index (1-based, offset by batch)
+        data_index[i] = offset + n
+        
+        # Calculate contribution as sum of all features in this combination
+        total_contrib = 0.0f0
         @inbounds for k = 1:K
+            comb_num = combs[k, comb_idx]
+            total_contrib += refArrayContrib[comb_num, n]
+        end
+        contribs[i] = total_contrib
+        
+        # Extract motifs, distances, and positions
+        @inbounds for k = 1:K
+            comb_num = combs[k, comb_idx]
             # Store filter ID
-            motifs_obtained[i, 2*(k-1)+1] = refArray[combs[k, comb_idx], FILTER_INDEX_COLUMN, n]
+            motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]
             
             # Store distance to next filter (if not last)
             if k < K
-                pos1 = refArray[combs[k, comb_idx], POSITION_COLUMN, n]
+                pos1 = refArray[comb_num, POSITION_COLUMN, n]
                 pos2 = refArray[combs[k+1, comb_idx], POSITION_COLUMN, n]
-                motifs_obtained[i, 2*k] = pos2 - pos1 - filter_len
+                distances_obtained[i, k] = pos2 - pos1 - filter_len
             end
         end
+        
+        # Store start and end positions
+        positions_obtained[i, 1] = refArray[combs[1, comb_idx], POSITION_COLUMN, n]  # start
+        positions_obtained[i, 2] = refArray[combs[K, comb_idx], POSITION_COLUMN, n] + filter_len - 1  # end
     end
 end
 
 """
-CPU version: Extract configurations for ordinary case - only filter/feature IDs.
+CPU version: Extract configurations for ordinary case - feature IDs, data_index, contributions.
+Returns matrices: motifs, data_index, contribs.
 """
-function obtain_motifs_ordinary_cpu!(where_exceeds, combs, refArray, motifs_obtained)
+function obtain_motifs_ordinary_cpu!(where_exceeds, combs, refArray, refArrayContrib, motifs_obtained, data_index, contribs, offset)
     for i in 1:length(where_exceeds)
         comb_idx, n = where_exceeds[i][1], where_exceeds[i][2]  # combination index, batch index
         K = size(combs, 1)
         
+        # Store data_index (1-based, offset by batch)
+        data_index[i] = offset + n
+        
+        # Calculate contribution as sum of all features in this combination
+        total_contrib = 0.0f0
+        @inbounds for k = 1:K
+            comb_num = combs[k, comb_idx]
+            total_contrib += refArrayContrib[comb_num, n]
+        end
+        contribs[i] = total_contrib
+        
+        # Extract feature IDs
         @inbounds for k = 1:K
             motifs_obtained[i, k] = refArray[combs[k, comb_idx], FILTER_INDEX_COLUMN, n]
         end
@@ -286,35 +357,113 @@ function make_selection_cpu!(r::Record, config::HyperSketchConfig)
     end
 end
 
+
+
+
+
 """
 CPU version: Extract configurations where combinations exceed minimum count threshold.
+Returns a DataFrame with the same structure as the GPU version.
 """
 function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConfig)
     @info "Running CPU configuration extraction..."
     
-    enriched_motifs = Vector{Set{Tuple}}(undef, num_batches(r))
+    # Collect results from all batches
+    motifs_vec = Vector{Matrix{IntType}}()
+    data_idx_vec = Vector{Vector{IntType}}()
+    contrib_vec = Vector{Vector{Float32}}()
+    distances_vec = r.case == :Convolution ? Vector{Matrix{IntType}}() : nothing
+    positions_vec = r.case == :Convolution ? Vector{Matrix{IntType}}() : nothing
+    
+    offset = 0  # Track the data_index offset across batches
     
     for batch_idx = 1:num_batches(r)
         where_exceeds = findall(r.selectedCombs[batch_idx] .== true)
+        batch_size = size(r.vecRefArray[batch_idx], 3)
         
-        if isempty(where_exceeds)
-            enriched_motifs[batch_idx] = Set{Vector{IntType}}()
-        else
-            motifs_obtained = Matrix{IntType}(undef, length(where_exceeds), actual_motif_size(r))
+        if !isempty(where_exceeds)
+            n_configs = length(where_exceeds)
             
             if r.case == :OrdinaryFeatures
-                obtain_motifs_ordinary_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained)
+                # Allocate arrays for ordinary case
+                motifs = Matrix{IntType}(undef, n_configs, r.motif_size)
+                data_index = Vector{IntType}(undef, n_configs)
+                contribs = Vector{Float32}(undef, n_configs)
+                
+                # Extract configurations
+                obtain_motifs_ordinary_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx],
+                                           r.vecRefArrayContrib[batch_idx],
+                                           motifs, data_index, contribs, offset)
+                
+                # Store results
+                push!(motifs_vec, motifs)
+                push!(data_idx_vec, data_index)
+                push!(contrib_vec, contribs)
+                
             elseif r.case == :Convolution
-                obtain_motifs_conv_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained, r.filter_len)
-            else
-                error("Unsupported case: $(r.case)")
+                @assert r.filter_len !== nothing "Convolution case requires filter_len"
+                
+                # Allocate arrays for convolution case
+                motifs = Matrix{IntType}(undef, n_configs, r.motif_size)
+                distances = Matrix{IntType}(undef, n_configs, r.motif_size - 1)
+                positions = Matrix{IntType}(undef, n_configs, 2)  # start, end
+                data_index = Vector{IntType}(undef, n_configs)
+                contribs = Vector{Float32}(undef, n_configs)
+                
+                # Extract configurations
+                obtain_motifs_conv_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx],
+                                       r.vecRefArrayContrib[batch_idx],
+                                       motifs, distances, positions, data_index, contribs,
+                                       r.filter_len, offset)
+                
+                # Store results
+                push!(motifs_vec, motifs)
+                push!(distances_vec, distances)
+                push!(positions_vec, positions)
+                push!(data_idx_vec, data_index)
+                push!(contrib_vec, contribs)
             end
-            
-            enriched_motifs[batch_idx] = Set(map(Tuple, eachrow(motifs_obtained)))
+        end
+        
+        offset += batch_size  # Increment by number of sequences in batch
+    end
+    
+    # If no configurations found, return empty DataFrame with proper structure
+    if isempty(motifs_vec)
+        if r.case == :OrdinaryFeatures
+            motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
+            col_names = [motif_cols..., :data_index, :contribution]
+            return DataFrame([name => IntType[] for name in motif_cols]..., 
+                           :data_index => IntType[], :contribution => Float32[])
+        else  # Convolution
+            motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
+            distance_cols = [Symbol("d$(i)$(i+1)") for i in 1:(r.motif_size-1)]
+            position_cols = [:start, :end]
+            col_names = [motif_cols..., distance_cols..., position_cols..., :data_index, :contribution]
+            return DataFrame([name => IntType[] for name in motif_cols]...,
+                           [name => IntType[] for name in distance_cols]...,
+                           [name => IntType[] for name in position_cols]...,
+                           :data_index => IntType[], :contribution => Float32[])
         end
     end
     
-    return reduce(union, enriched_motifs)
+    # Combine results from all batches and create DataFrame
+    if r.case == :OrdinaryFeatures
+        motifs = reduce(vcat, motifs_vec)
+        data_index = reduce(vcat, data_idx_vec)
+        contribs = reduce(vcat, contrib_vec)
+        
+        return _create_ordinary_dataframe_cpu(motifs, data_index, contribs, r.motif_size)
+        
+    else  # Convolution
+        motifs = reduce(vcat, motifs_vec)
+        distances = reduce(vcat, distances_vec)
+        positions = reduce(vcat, positions_vec)
+        data_index = reduce(vcat, data_idx_vec)
+        contribs = reduce(vcat, contrib_vec)
+        
+        return _create_convolution_dataframe_cpu(motifs, distances, positions, data_index, contribs, r.motif_size)
+    end
 end
 
 """

@@ -1,5 +1,6 @@
 using EpicHyperSketch
 using Test
+using DataFrames
 
 @testset "CPU Implementation (Both Cases)" begin
     @testset "CPU Convolution - Large Dataset (2000 points)" begin
@@ -45,19 +46,22 @@ using Test
             config=config_cpu
         )
         
-        @test isa(result_cpu, Set)
-        @test length(result_cpu) > 0  # Should find at least the ground truth pattern
-        @info "Number of enriched configurations found (CPU): $(length(result_cpu))"
+        @test isa(result_cpu, DataFrame)
+        @test nrow(result_cpu) > 0  # Should find at least the ground truth pattern
+        @info "Number of enriched configurations found (CPU): $(nrow(result_cpu))"
         
         # Check if ground truth pattern is found
         # For filters [1,2] with positions 5 and 15, distance = 15-5-filter_len = 2
         expected_distance = 15 - 5 - filter_len
-        found_ground_truth = any(cfg -> cfg[1] == 1 && cfg[2] == 2 && cfg[3] == expected_distance, result_cpu)
+        found_ground_truth = any(eachrow(result_cpu)) do row
+            row.m1 == 1 && row.m2 == 2 && row.d12 == expected_distance
+        end
         
         if found_ground_truth
             @info "✓ Ground truth pattern found: filters [1,2] with distance $(expected_distance)"
         else
-            @info "Available configurations: $(result_cpu)"
+            @info "Available configurations (first 10 rows):"
+            @info first(result_cpu, 10)
         end
     end
     
@@ -108,17 +112,20 @@ using Test
             config=config_cpu
         )
         
-        @test isa(result_cpu, Set)
-        @test length(result_cpu) > 0  # Should find at least the ground truth pattern
-        @info "Number of enriched configurations found (CPU): $(length(result_cpu))"
+        @test isa(result_cpu, DataFrame)
+        @test nrow(result_cpu) > 0  # Should find at least the ground truth pattern
+        @info "Number of enriched configurations found (CPU): $(nrow(result_cpu))"
         
         # Check if ground truth pattern is found
-        found_ground_truth = any(cfg -> cfg == (5, 15), result_cpu)
+        found_ground_truth = any(eachrow(result_cpu)) do row
+            row.m1 == 5 && row.m2 == 15
+        end
         
         if found_ground_truth
             @info "✓ Ground truth pattern found: features [5,15]"
         else
-            @info "Available configurations: $(result_cpu)"
+            @info "Available configurations (first 10 rows):"
+            @info first(result_cpu, 10)
         end
     end
 end
