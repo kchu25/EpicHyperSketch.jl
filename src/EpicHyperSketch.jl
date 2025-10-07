@@ -102,7 +102,7 @@ function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketc
             for w in where_exceeds_vec];
     data_index_vec = [CUDA.zeros(IntType, length(w))
             for w in where_exceeds_vec];
-    contributions_vec = 
+    contribution_vec = 
         [CUDA.zeros(FloatType, length(w)) 
             for w in where_exceeds_vec];
 
@@ -115,12 +115,17 @@ function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketc
                     r.vecRefArrayContrib[batch_idx],
                     motifs_obtained_vec[batch_idx],
                     data_index_vec[batch_idx],
-                    contributions_vec[batch_idx],                    
+                    contribution_vec[batch_idx],                    
                     offset                    
                     )
             offset += length(where_exceeds_vec[batch_idx])
         end
-        return motifs_obtained_vec, data_index_vec, contributions_vec
+        motifs_obtained = reduce(vcat, motifs_obtained_vec)
+        data_index = reduce(vcat, data_index_vec)
+        contribs = reduce(vcat, contribution_vec)
+
+
+
     elseif r.case == :Convolution
         @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
 
@@ -141,16 +146,19 @@ function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketc
                         distances_obtained_vec[batch_idx],
                         data_index_vec[batch_idx],
                         positions_obtained_vec[batch_idx],
-                        contributions_vec[batch_idx],
+                        contribution_vec[batch_idx],
                         r.filter_len,
                         offset
                         )
             offset += length(where_exceeds_vec[batch_idx])
         end
 
-        
+        motifs_obtained = reduce(vcat, motifs_obtained_vec)
+        distances_obtained = reduce(vcat, distances_obtained_vec)
+        positions_obtained = reduce(vcat, positions_obtained_vec)
+        data_index = reduce(vcat, data_index_vec)
+        contribs = reduce(vcat, contribution_vec)
 
-        return motifs_obtained_vec, data_index_vec, distances_obtained_vec, positions_obtained_vec, contributions_vec        
     else
         error("Unsupported case: $(r.case)")
     end

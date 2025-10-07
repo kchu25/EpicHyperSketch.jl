@@ -1,0 +1,6 @@
+in the case :Convolution, you can see that the matrices: 
+    motifs_obtain has r.motif_size columns
+    distances_obtained has r.motif_size-1 columns
+    positions_obtained has two columns 
+    data_index has one column
+    contribution has one column
