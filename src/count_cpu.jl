@@ -229,13 +229,10 @@ CPU version: Extract configurations for convolution case - filter IDs, distances
 Returns matrices: motifs, distances, positions, data_index, contribs.
 """
 function obtain_motifs_conv_cpu!(where_exceeds, combs, refArray, refArrayContrib, motifs_obtained, distances_obtained, 
-                                  positions_obtained, data_index, contribs, filter_len, offset)
+                                  positions_obtained, data_index, contribs, filter_len)
     for i in 1:length(where_exceeds)
         comb_idx, n = where_exceeds[i][1], where_exceeds[i][2]  # combination index, batch index
         K = size(combs, 1)
-        
-        # Store data_index (1-based, offset by batch)
-        data_index[i] = offset + n
         
         # Calculate contribution as sum of all features in this combination
         total_contrib = 0.0f0
@@ -262,6 +259,9 @@ function obtain_motifs_conv_cpu!(where_exceeds, combs, refArray, refArrayContrib
         # Store start and end positions
         positions_obtained[i, 1] = refArray[combs[1, comb_idx], POSITION_COLUMN, n]  # start
         positions_obtained[i, 2] = refArray[combs[K, comb_idx], POSITION_COLUMN, n] + filter_len - 1  # end
+        
+        # Store data_index from refArray (use first combination element, all should have same data_index)
+        data_index[i] = refArray[combs[1, comb_idx], DATA_PT_INDEX_COLUMN, n]
     end
 end
 
@@ -269,13 +269,10 @@ end
 CPU version: Extract configurations for ordinary case - feature IDs, data_index, contributions.
 Returns matrices: motifs, data_index, contribs.
 """
-function obtain_motifs_ordinary_cpu!(where_exceeds, combs, refArray, refArrayContrib, motifs_obtained, data_index, contribs, offset)
+function obtain_motifs_ordinary_cpu!(where_exceeds, combs, refArray, refArrayContrib, motifs_obtained, data_index, contribs)
     for i in 1:length(where_exceeds)
         comb_idx, n = where_exceeds[i][1], where_exceeds[i][2]  # combination index, batch index
         K = size(combs, 1)
-        
-        # Store data_index (1-based, offset by batch)
-        data_index[i] = offset + n
         
         # Calculate contribution as sum of all features in this combination
         total_contrib = 0.0f0
@@ -289,6 +286,9 @@ function obtain_motifs_ordinary_cpu!(where_exceeds, combs, refArray, refArrayCon
         @inbounds for k = 1:K
             motifs_obtained[i, k] = refArray[combs[k, comb_idx], FILTER_INDEX_COLUMN, n]
         end
+        
+        # Store data_index from refArray (use first combination element, all should have same data_index)
+        data_index[i] = refArray[combs[1, comb_idx], DATA_PT_INDEX_COLUMN, n]
     end
 end
 

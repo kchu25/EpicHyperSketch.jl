@@ -20,13 +20,13 @@ const BATCH_SIZE = 500
 
 # Constants for refArray indexing (features/filters data)
 const FILTER_INDEX_COLUMN = 1  # Filter ID / Feature ID
-const POSITION_COLUMN = 2     # Position in sequence
-
+const DATA_PT_INDEX_COLUMN = 2  # Data point index in the data set (for future use)
+const POSITION_COLUMN = 3     # Position in sequence
 
 # Number of columns (2nd dimension) in refArray based on case
 const refArraysDim = Dict(
-    :OrdinaryFeatures => 1,
-    :Convolution => 2
+    :OrdinaryFeatures => 2,
+    :Convolution => 3
 )
 
 include("types.jl")

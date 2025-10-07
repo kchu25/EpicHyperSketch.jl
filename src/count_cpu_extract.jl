@@ -51,11 +51,8 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
     distances_vec = r.case == :Convolution ? Vector{Matrix{IntType}}() : nothing
     positions_vec = r.case == :Convolution ? Vector{Matrix{IntType}}() : nothing
     
-    offset = 0  # Track the data_index offset across batches
-    
     for batch_idx = 1:num_batches(r)
         where_exceeds = findall(r.selectedCombs[batch_idx] .== true)
-        batch_size = size(r.vecRefArray[batch_idx], 3)
         
         if !isempty(where_exceeds)
             n_configs = length(where_exceeds)
@@ -69,7 +66,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
                 # Extract configurations
                 obtain_motifs_ordinary_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx],
                                            r.vecRefArrayContrib[batch_idx],
-                                           motifs, data_index, contribs, offset)
+                                           motifs, data_index, contribs)
                 
                 # Store results
                 push!(motifs_vec, motifs)
@@ -90,7 +87,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
                 obtain_motifs_conv_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx],
                                        r.vecRefArrayContrib[batch_idx],
                                        motifs, distances, positions, data_index, contribs,
-                                       r.filter_len, offset)
+                                       r.filter_len)
                 
                 # Store results
                 push!(motifs_vec, motifs)
@@ -100,8 +97,6 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
                 push!(contrib_vec, contribs)
             end
         end
-        
-        offset += batch_size  # Increment by number of sequences in batch
     end
     
     # If no configurations found, return empty DataFrame with proper structure

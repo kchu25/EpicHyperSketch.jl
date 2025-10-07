@@ -72,11 +72,9 @@ end
 
 # Helper to launch ordinary feature extraction kernels
 function _launch_ordinary_extraction!(r::Record, where_exceeds_vec, motifs_vec, data_idx_vec, contrib_vec, threads)
-    offset = IntType(0)
     
     for batch_idx = 1:num_batches(r)
         n_items = length(where_exceeds_vec[batch_idx])
-        batch_size = size(r.vecRefArray[batch_idx], 3)  # Number of sequences in this batch
         
         if n_items > 0  # Only launch kernel if there are items to process
             blocks = cld(n_items, threads)
@@ -88,22 +86,18 @@ function _launch_ordinary_extraction!(r::Record, where_exceeds_vec, motifs_vec, 
                 motifs_vec[batch_idx],
                 data_idx_vec[batch_idx],
                 contrib_vec[batch_idx],
-                offset
             )
         end
         
-        offset += batch_size  # Increment by number of sequences, not number of enriched motifs
     end
 end
 
 # Helper to launch convolution extraction kernels
 function _launch_convolution_extraction!(r::Record, where_exceeds_vec, motifs_vec, distances_vec, 
                                         data_idx_vec, positions_vec, contrib_vec, threads)
-    offset = IntType(0)
     
     for batch_idx = 1:num_batches(r)
         n_items = length(where_exceeds_vec[batch_idx])
-        batch_size = size(r.vecRefArray[batch_idx], 3)  # Number of sequences in this batch
         
         if n_items > 0  # Only launch kernel if there are items to process
             blocks = cld(n_items, threads)
@@ -118,11 +112,9 @@ function _launch_convolution_extraction!(r::Record, where_exceeds_vec, motifs_ve
                 positions_vec[batch_idx],
                 contrib_vec[batch_idx],
                 r.filter_len,
-                offset
             )
         end
         
-        offset += batch_size  # Increment by number of sequences, not number of enriched motifs
     end
 end
 

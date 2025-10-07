@@ -72,8 +72,8 @@ RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
         vecRefArray, vecRefArrayContrib = E.constructVecRefArrays(activation_dict, max_active_len; 
                 batch_size=batch_size, case=case, use_cuda=use_cuda)
         @test length(vecRefArray) == 3  # number of batches
-        @test size(vecRefArray[1]) == (3, 2, 2)
-        # test each first consecutive nonzero elements in refArray[:,2,n] in vecRefArray is sorted in ascending order
+        @test size(vecRefArray[1]) == (3, 3, 2)  # (max_active_len, refArraysDim[:Convolution]=3, batch_size)
+        # test each first consecutive nonzero elements in refArray[:,POSITION_COLUMN,n] in vecRefArray is sorted in ascending order
         # @info "$(vecRefArray[1][:, E.POSITION_COLUMN, 1])"
         for i in eachindex(vecRefArray)
             b_size_here = size(vecRefArray[i], 3)

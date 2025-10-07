@@ -41,8 +41,7 @@ mutable struct Record
 
         # preprocess the activation_dict
 
-        # filter_empty!(activation_dict)
-
+        filter_empty!(activation_dict)
         sort_activation_dict!(activation_dict)
         # determine case and max_active_length
         case = dict_case(activation_dict)
@@ -137,13 +136,15 @@ function constructVecRefArrays(
         features = activation_dict[data_pt_index]        
         if case == :OrdinaryFeatures
             for (i, feat) in enumerate(features)
-                vecRefArray[batch_index][i, 1, within_batch_index] = convert(IntType, feat.feature)
+                vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.feature)
+                vecRefArray[batch_index][i, DATA_PT_INDEX_COLUMN, within_batch_index] = convert(IntType, data_pt_index)
                 vecRefArrayContrib[batch_index][i, within_batch_index] = convert(FloatType, feat.contribution)
             end
         elseif case == :Convolution
             for (i, feat) in enumerate(features)
                 vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.filter)
                 vecRefArray[batch_index][i, POSITION_COLUMN, within_batch_index] = convert(IntType, feat.position)
+                vecRefArray[batch_index][i, DATA_PT_INDEX_COLUMN, within_batch_index] = convert(IntType, data_pt_index)
                 vecRefArrayContrib[batch_index][i, within_batch_index] = convert(FloatType, feat.contribution)
             end
         else
@@ -208,8 +209,8 @@ end
     filter_empty!(dict)
 Filter out keys with empty values from the dictionary.
 """
-# function filter_empty!(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
-#      for k in keys(dict)
-#         isempty(dict[k]) && delete!(dict, k)
-#     end
-# end
+function filter_empty!(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
+     for k in keys(dict)
+        isempty(dict[k]) && delete!(dict, k)
+    end
+end

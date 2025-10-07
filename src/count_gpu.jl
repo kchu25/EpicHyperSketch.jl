@@ -219,7 +219,7 @@ end
 """
 Extract configurations for convolution case: filter IDs and inter-filter distances.
 """
-function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_obtained, distances, data_index, positions, contribs, filter_len, offset)
+function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_obtained, distances, data_index, positions, contribs, filter_len)
     i, j, n, in_bounds = _config_kernel_setup(CindsVec)
     
     if in_bounds
@@ -243,7 +243,7 @@ function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_
             end
             contrib += refArrayContrib[comb_num, n]
         end
-        data_index[i] = n + offset
+        data_index[i] = refArray[comb_num, DATA_PT_INDEX_COLUMN, n]
         contribs[i] = contrib
     end
     return nothing
@@ -252,7 +252,7 @@ end
 """
 Extract configurations for ordinary case: only filter/feature IDs.
 """
-function obtain_motifs_ordinary!(CindsVec, combs, refArray, refArrayContrib, motifs_obtained, data_index, contribs, offset)
+function obtain_motifs_ordinary!(CindsVec, combs, refArray, refArrayContrib, motifs_obtained, data_index, contribs)
     i, j, n, in_bounds = _config_kernel_setup(CindsVec)
     
     if in_bounds
@@ -263,7 +263,7 @@ function obtain_motifs_ordinary!(CindsVec, combs, refArray, refArrayContrib, mot
             motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]
             contrib += refArrayContrib[comb_num, n]
         end
-        data_index[i] = n + offset
+        data_index[i] = refArray[comb_num, DATA_PT_INDEX_COLUMN, n]
         contribs[i] = contrib
     end
     return nothing
