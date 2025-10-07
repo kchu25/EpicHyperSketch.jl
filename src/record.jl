@@ -130,14 +130,10 @@ function constructVecRefArrays(
 
         features = activation_dict[data_pt_index]        
         if case == :OrdinaryFeatures
-            for (i, feat) in enumerate(features)
-                vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.feature)
-                vecRefArray[batch_index][i, CONTRIBUTION_COLUMN, within_batch_index] = convert(FloatType, feat.contribution)
-            end
+            vecRefArray[batch_index][1:length(features), 1, within_batch_index] .= convert.(IntType, features)
         elseif case == :Convolution
             for (i, feat) in enumerate(features)
                 vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.filter)
-                vecRefArray[batch_index][i, CONTRIBUTION_COLUMN, within_batch_index] = convert(FloatType, feat.contribution)
                 vecRefArray[batch_index][i, POSITION_COLUMN, within_batch_index] = convert(IntType, feat.position)
             end
         else
@@ -173,8 +169,8 @@ function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     maximum(length, values(dict))
 end
 
-const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{Int, FloatType}}
-const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{Int, FloatType, Int}}
+const OrdinaryFeatureType = Int
+const ConvolutionFeatureType = NamedTuple{(:filter, :position), Tuple{Int, Int}}
 
 function dict_case(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     if S == OrdinaryFeatureType
