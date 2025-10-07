@@ -78,8 +78,10 @@ function _launch_ordinary_extraction!(r::Record, where_exceeds_vec, motifs_vec, 
         
         if n_items > 0  # Only launch kernel if there are items to process
             blocks = cld(n_items, threads)
+            # Convert where_exceeds to CuArray for GPU
+            where_exceeds_gpu = CuArray(where_exceeds_vec[batch_idx])
             @cuda threads=threads blocks=blocks obtain_motifs_ordinary!(
-                where_exceeds_vec[batch_idx], 
+                where_exceeds_gpu, 
                 r.combs, 
                 r.vecRefArray[batch_idx], 
                 r.vecRefArrayContrib[batch_idx],
@@ -101,8 +103,10 @@ function _launch_convolution_extraction!(r::Record, where_exceeds_vec, motifs_ve
         
         if n_items > 0  # Only launch kernel if there are items to process
             blocks = cld(n_items, threads)
+            # Convert where_exceeds to CuArray for GPU
+            where_exceeds_gpu = CuArray(where_exceeds_vec[batch_idx])
             @cuda threads=threads blocks=blocks obtain_motifs_conv!(
-                where_exceeds_vec[batch_idx], 
+                where_exceeds_gpu, 
                 r.combs, 
                 r.vecRefArray[batch_idx], 
                 r.vecRefArrayContrib[batch_idx],
@@ -140,7 +144,7 @@ end
 
 # Main function to extract and format enriched configurations
 function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketchConfig)
-    threads = config.threads_1d
+    threads = config.threads_1d[1]  # Extract the integer from the tuple
     
     # Initialize result arrays
     motifs_vec, data_idx_vec, contrib_vec, distances_vec, positions_vec = 

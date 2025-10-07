@@ -5,6 +5,8 @@ using Random
 
 # include("test_config_errors.jl")# Large tests with CPU backend
 include("test_cpu_implementation.jl")
+include("test_large_example_ordinary.jl")  # Always include for CPU tests
+include("test_large_example_convolution.jl")  # Always include for CPU tests
 
 """
 # Full GPU tests  
@@ -13,8 +15,6 @@ EPIC_HYPERSKETCH_GPU_TESTS=true julia --project=. -e "using Pkg; Pkg.test()"
 
 # Check if we should run GPU tests (local development) or CPU only (CI/GitHub Actions)
 const RUN_GPU_TESTS = get(ENV, "EPIC_HYPERSKETCH_GPU_TESTS", "false") == "true"
-
-RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
 
 @testset "EpicHyperSketch.jl" begin
        
@@ -136,12 +136,35 @@ RUN_GPU_TESTS && include("test_large_example_ordinary.jl")
         # @test num_batches(record_convolution) == length(record_convolution.vecRefArray)
     end
 
+    @testset "Large Example Tests OrdinaryFeature case (CPU)" begin
+        println("Running large example test with CPU backend...")
+        test_large_example_cpu()  # CPU-only version with fewer min_count thresholds
+        @test true  # If we get here without error, test passes
+    end
+
+    @testset "Large Example Tests ConvolutionFeature case (CPU)" begin
+        println("Running large convolution example test with CPU backend...")
+        test_large_example_convolution_cpu()  # CPU-only version with fewer min_count thresholds
+        @test true  # If we get here without error, test passes
+    end
+
     if RUN_GPU_TESTS
         @testset "Large Example Tests OrdinaryFeature case (GPU)" begin
             println("Running full large example test with GPU backend...")
             # Only run if CUDA is available
             if CUDA.functional()
-                test_large_example_ordinary()  # From test_large_example.jl
+                test_large_example_ordinary()  # From test_large_example_ordinary.jl
+                @test true  # If we get here without error, test passes
+            else
+                @test_skip "CUDA not available for GPU tests"
+            end
+        end
+
+        @testset "Large Example Tests ConvolutionFeature case (GPU)" begin
+            println("Running full large convolution example test with GPU backend...")
+            # Only run if CUDA is available
+            if CUDA.functional()
+                test_large_example_convolution()  # From test_large_example_convolution.jl
                 @test true  # If we get here without error, test passes
             else
                 @test_skip "CUDA not available for GPU tests"

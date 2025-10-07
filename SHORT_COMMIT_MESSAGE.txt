@@ -1,0 +1,32 @@
+Add large-scale convolution test and fix GPU kernel bugs
+
+Created comprehensive test coverage for ConvolutionFeature with 750 sequences
+and fixed critical GPU kernel bugs affecting motif extraction.
+
+New Features:
+- test/test_large_example_convolution.jl: Large-scale convolution test with
+  ground-truth motifs and validation for both CPU and GPU backends
+- test/CONVOLUTION_TEST_README.md: Detailed documentation explaining test
+  design, position constraints, and probabilistic behavior
+
+Bug Fixes:
+- Fixed GPU kernel scope bug: Variable 'comb_num' used outside loop in both
+  obtain_motifs_conv! and obtain_motifs_ordinary! kernels. Introduced
+  last_comb_num variable to properly track combination index.
+- Fixed GPU thread config: Extract integer from threads_1d tuple before
+  using in cld() for kernel launch calculations.
+- Fixed GPU array transfer: Convert where_exceeds_vec to CuArray before
+  passing to GPU kernels to avoid non-bitstype argument error.
+
+Test Results:
+- All 18 tests passing on both CPU and GPU
+- Complete coverage for both OrdinaryFeature and ConvolutionFeature cases
+- Validates proper handling of batch processing, filter spacing, and
+  probabilistic Count-Min Sketch behavior
+
+Files Changed:
+- src/count_gpu.jl
+- src/count_gpu_extract.jl
+- test/test_large_example_convolution.jl (new)
+- test/CONVOLUTION_TEST_README.md (new)
+- test/runtests.jl

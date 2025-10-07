@@ -4,88 +4,108 @@ using Combinatorics  # For combinations function
 using CUDA  # For CUDA.functional() check
 using DataFrames  # For DataFrame output
 
-# Helper function to convert integers to OrdinaryFeature format
-function make_features(feature_ids::Vector{Int})
-    return [(feature=id, contribution=1.0f0) for id in feature_ids]
+# Helper function to convert filter IDs to ConvolutionFeature format with specific positions
+function make_convolution_features_with_positions(filters_and_positions::Vector{Tuple{Int,Int}}, filter_len::Int=8)
+    return [(filter=f, contribution=1.0f0, position=p) for (f, p) in filters_and_positions]
+end
+
+# Helper function to convert filter IDs to ConvolutionFeature format
+# Positions are spaced to avoid overlaps with given filter_len
+function make_convolution_features(filter_ids::Vector{Int}, filter_len::Int=8)
+    n = length(filter_ids)
+    # Space positions by filter_len + random distance (1-5) to avoid overlaps
+    positions = Int[]
+    current_pos = 1
+    for i in 1:n
+        push!(positions, current_pos)
+        if i < n
+            current_pos += filter_len + rand(1:5)  # Move past filter plus some gap
+        end
+    end
+    return [(filter=id, contribution=1.0f0, position=pos) for (id, pos) in zip(filter_ids, positions)]
 end
 
 """
-Create a large test ActivationDict with known ground truth motifs.
+Create a large test ActivationDict with known ground truth motifs using ConvolutionFeature.
 This example has 750 sequences (> BATCH_SIZE = 500) with controlled motif patterns.
 
-Ground Truth for motif_size = 3:
-- Motif [7, 19, 42]: appears exactly 25 times
-- Motif [13, 28, 55]: appears exactly 15 times  
-- Motif [3, 41, 67]: appears exactly 8 times
-- Motif [22, 8, 39]: appears exactly 12 times
-- All other 3-element combinations should be rare (≤ 2 occurrences)
+Ground Truth for motif_size = 3 and filter_len = 8:
+- Motif [7, 19, 42] at positions [10, 20, 32]: appears exactly 25 times
+  (distances: 20-10-8=2, 32-20-8=4)
+- Motif [13, 28, 55] at positions [5, 18, 29]: appears exactly 15 times
+  (distances: 18-5-8=5, 29-18-8=3)
+- Motif [3, 41, 67] at positions [15, 25, 40]: appears exactly 8 times
+  (distances: 25-15-8=2, 40-25-8=7)
+- Motif [22, 8, 39] at positions [8, 20, 35]: appears exactly 12 times
+  (distances: 20-8-8=4, 35-20-8=7)
+All other 3-element combinations should be rare (≤ 2 occurrences)
 """
-function create_large_test_dict()
+function create_large_convolution_test_dict()
     Random.seed!(42)  # For reproducibility
-    activation_dict = Dict{Int, Vector{EpicHyperSketch.OrdinaryFeature}}()
+    activation_dict = Dict{Int, Vector{EpicHyperSketch.ConvolutionFeature}}()
+    filter_len = 8
     
-    # Insert motif [7,19,42] exactly 25 times - mix consecutive and scattered
+    # Insert motif [7,19,42] at specific positions exactly 25 times
+    # Positions: [10, 20, 32] -> distances: [2, 4]
     for i in 1:25
-        if i <= 8
-            # Consecutive at beginning
-            activation_dict[i] = make_features([7, 19, 42, rand(100:150, rand(2:5))...])
-        elseif i <= 16
-            # Scattered in sequence (elements present but not consecutive)
-            filler1 = rand(100:150, rand(1:2))
-            filler2 = rand(100:150, rand(1:2)) 
-            filler3 = rand(100:150, rand(1:3))
-            activation_dict[i] = make_features([filler1..., 7, filler2..., 19, filler3..., 42, rand(100:150, rand(1:2))...])
-        elseif i <= 20
-            # In middle (consecutive)
-            activation_dict[i] = make_features([rand(100:150, rand(1:3))..., 7, 19, 42, rand(100:150, rand(1:3))...])
+        motif_features = [(7, 10), (19, 20), (42, 32)]
+        if i <= 15
+            # Just the motif with some random noise
+            noise_n = rand(0:3)
+            noise_features = [(rand(100:150), rand(50:100)) for _ in 1:noise_n]
+            all_features = [motif_features..., noise_features...]
+            # Sort by position to maintain order
+            sort!(all_features, by=x->x[2])
+            activation_dict[i] = make_convolution_features_with_positions(all_features, filter_len)
         else
-            # Mixed: some consecutive, some scattered
-            if rand() < 0.5
-                activation_dict[i] = make_features([rand(100:150, rand(2:5))..., 7, 19, 42])
-            else
-                # Scattered version
-                activation_dict[i] = make_features([7, rand(100:150, 2)..., 19, rand(100:150, 1)..., 42])
-            end
+            # Add more noise
+            noise_n = rand(2:5)
+            noise_features = [(rand(100:150), rand(50:100)) for _ in 1:noise_n]
+            all_features = [motif_features..., noise_features...]
+            sort!(all_features, by=x->x[2])
+            activation_dict[i] = make_convolution_features_with_positions(all_features, filter_len)
         end
     end
     
-    # Insert motif [13,28,55] exactly 15 times - similar mix
+    # Insert motif [13,28,55] at specific positions exactly 15 times
+    # Positions: [5, 18, 29] -> distances: [5, 3]
     for i in 26:40
-        if i <= 31
-            # Consecutive
-            activation_dict[i] = make_features([rand(200:250, rand(1:3))..., 13, 28, 55, rand(200:250, rand(1:4))...])
-        else
-            # Scattered
-            filler = rand(200:250, rand(1:3))
-            activation_dict[i] = make_features([13, filler..., 28, rand(200:250, rand(1:2))..., 55, rand(200:250, rand(1:2))...])
-        end
+        motif_features = [(13, 5), (28, 18), (55, 29)]
+        noise_n = rand(0:4)
+        noise_features = [(rand(200:250), rand(50:100)) for _ in 1:noise_n]
+        all_features = [motif_features..., noise_features...]
+        sort!(all_features, by=x->x[2])
+        activation_dict[i] = make_convolution_features_with_positions(all_features, filter_len)
     end
     
-    # Insert motif [3,41,67] exactly 8 times
+    # Insert motif [3,41,67] at specific positions exactly 8 times
+    # Positions: [15, 25, 40] -> distances: [2, 7]
     for i in 41:48
-        if i <= 44
-            activation_dict[i] = make_features([3, 41, 67, rand(300:350, rand(2:6))...])
-        else
-            # Scattered
-            activation_dict[i] = make_features([3, rand(300:350, rand(2:4))..., 41, rand(300:350, 1)..., 67])
-        end
+        motif_features = [(3, 15), (41, 25), (67, 40)]
+        noise_n = rand(0:4)
+        noise_features = [(rand(300:350), rand(50:100)) for _ in 1:noise_n]
+        all_features = [motif_features..., noise_features...]
+        sort!(all_features, by=x->x[2])
+        activation_dict[i] = make_convolution_features_with_positions(all_features, filter_len)
     end
     
-    # Insert motif [22,8,39] exactly 12 times
+    # Insert motif [22,8,39] at specific positions exactly 12 times
+    # Positions: [8, 20, 35] -> distances: [4, 7]
     for i in 49:60
-        if i <= 54
-            activation_dict[i] = make_features([rand(400:450, rand(1:2))..., 22, 8, 39, rand(400:450, rand(1:3))...])
-        else
-            # Scattered
-            activation_dict[i] = make_features([22, rand(400:450, rand(1:3))..., 8, rand(400:450, rand(1:2))..., 39, rand(400:450, rand(1:2))...])
-        end
+        motif_features = [(22, 8), (8, 20), (39, 35)]
+        noise_n = rand(0:4)
+        noise_features = [(rand(400:450), rand(50:100)) for _ in 1:noise_n]
+        all_features = [motif_features..., noise_features...]
+        sort!(all_features, by=x->x[2])
+        activation_dict[i] = make_convolution_features_with_positions(all_features, filter_len)
     end
     
     # Fill sequences 61-600 with random data (no systematic motifs)
     for i in 61:600
         # Random sequences with length 3-8, using values 500-600 to avoid accidental motifs
         seq_length = rand(3:8)
-        activation_dict[i] = make_features(rand(500:600, seq_length))
+        filters = rand(500:600, seq_length)
+        activation_dict[i] = make_convolution_features(filters, filter_len)
     end
     
     # Add sequences 601-700 with some overlapping elements but no complete motifs
@@ -93,39 +113,42 @@ function create_large_test_dict()
         # These might have 1 or 2 elements from our motifs, but not complete triplets
         base_elements = rand([7, 19, 13, 28, 3, 41, 22, 8], rand(1:2))
         filler = rand(700:800, rand(3:6))
-        activation_dict[i] = make_features([base_elements..., filler...])
+        filters = [base_elements..., filler...]
+        activation_dict[i] = make_convolution_features(filters, filter_len)
     end
     
     # Add sequences 701-750 with some empty and short sequences
     for i in 701:750
         if i <= 710
-            activation_dict[i] = EpicHyperSketch.OrdinaryFeature[]  # Empty sequences
+            activation_dict[i] = EpicHyperSketch.ConvolutionFeature[]  # Empty sequences
         elseif i <= 720
-            activation_dict[i] = make_features([rand(900:1000)])  # Single elements
+            activation_dict[i] = make_convolution_features([rand(900:1000)], filter_len)  # Single elements
         elseif i <= 730
-            activation_dict[i] = make_features([rand(900:1000), rand(900:1000)])  # Pairs
+            activation_dict[i] = make_convolution_features([rand(900:1000), rand(900:1000)], filter_len)  # Pairs
         else
-            activation_dict[i] = make_features(rand(900:1000, rand(3:5)))  # Regular random sequences
+            n = rand(3:5)
+            activation_dict[i] = make_convolution_features(rand(900:1000, n), filter_len)  # Regular random sequences
         end
     end
     
     return activation_dict
 end
+
 """
 Verify ground truth by manually counting motifs in the test dictionary.
 Supports both consecutive subsequences and subset-based motifs.
 """
-function verify_ground_truth(activation_dict, motif_size=3; check_subsets=true)
+function verify_ground_truth_convolution(activation_dict, motif_size=3; check_subsets=true)
     subset_motif_counts = Dict{Set{Int},Int}()
 
     for (seq_id, sequence) in activation_dict
         if length(sequence) >= motif_size
-            # Extract feature IDs from NamedTuples
-            feature_ids = [feat.feature for feat in sequence]
+            # Extract filter IDs from NamedTuples
+            filter_ids = [feat.filter for feat in sequence]
 
             # Count subset-based motifs (all combinations of motif_size elements)
             if check_subsets
-                unique_seq = unique(feature_ids)
+                unique_seq = unique(filter_ids)
                 if length(unique_seq) >= motif_size
                     for combo in combinations(unique_seq, motif_size)
                         motif_set = Set(combo)
@@ -136,14 +159,11 @@ function verify_ground_truth(activation_dict, motif_size=3; check_subsets=true)
         end
     end
 
-    # Sort consecutive motifs by count (descending)
-
-
     if check_subsets
         # Sort subset motifs by count (descending)
         sorted_subsets = sort(collect(subset_motif_counts), by=x -> x[2], rev=true)
 
-        println("\n=== GROUND TRUTH VERIFICATION (SUBSETS) ===")
+        println("\n=== GROUND TRUTH VERIFICATION (SUBSETS, CONVOLUTION) ===")
         println("Top 15 subset motifs by count:")
         for (i, (motif_set, count)) in enumerate(sorted_subsets[1:min(15, end)])
             println("$i. $(collect(motif_set)): $count times")
@@ -159,7 +179,7 @@ function verify_ground_truth(activation_dict, motif_size=3; check_subsets=true)
     ]
 
     if check_subsets
-        println("\n=== EXPECTED SUBSET MOTIFS VERIFICATION ===")
+        println("\n=== EXPECTED SUBSET MOTIFS VERIFICATION (CONVOLUTION) ===")
         for (expected_motif, expected_count) in expected_consecutive_motifs
             motif_set = Set(expected_motif)
             actual_count = get(subset_motif_counts, motif_set, 0)
@@ -173,11 +193,11 @@ end
 
 
 """
-Test the EpicHyperSketch pipeline with the large example.
+Test the EpicHyperSketch pipeline with the large convolution example.
 """
-function test_large_example(; use_gpu=true, min_counts=[5, 8, 10, 15])
-    println("Creating large test dictionary...")
-    test_dict = create_large_test_dict()
+function test_large_example_convolution(; use_gpu=true, min_counts=[5, 8, 10, 15], filter_len=8)
+    println("Creating large convolution test dictionary...")
+    test_dict = create_large_convolution_test_dict()
     println("Created dictionary with $(length(test_dict)) sequences")
     
     # Check CUDA availability if GPU requested
@@ -189,13 +209,13 @@ function test_large_example(; use_gpu=true, min_counts=[5, 8, 10, 15])
     println("Backend: $(use_gpu ? "GPU (CUDA)" : "CPU")")
     
     # Verify ground truth (both consecutive and subset-based)
-    subset_counts = verify_ground_truth(test_dict, 3; check_subsets=true)
+    subset_counts = verify_ground_truth_convolution(test_dict, 3; check_subsets=true)
     
     # Analyze enrichment distribution
     all_counts = collect(values(subset_counts))
     sorted_counts = sort(all_counts, rev=true)
     
-    println("\n=== ENRICHMENT ANALYSIS ===")
+    println("\n=== ENRICHMENT ANALYSIS (CONVOLUTION) ===")
     println("Total unique motifs: $(length(subset_counts))")
     println("Count distribution:")
     println("  Max count: $(maximum(all_counts))")
@@ -208,7 +228,7 @@ function test_large_example(; use_gpu=true, min_counts=[5, 8, 10, 15])
     println("  Motifs with count ≥ 15: $(count(x -> x >= 15, all_counts))")
     
     # Test with EpicHyperSketch
-    println("\n=== TESTING WITH EPICHYPERSKETCH ===")
+    println("\n=== TESTING WITH EPICHYPERSKETCH (CONVOLUTION) ===")
     
     # Test with different min_count thresholds
     for min_count in min_counts
@@ -219,19 +239,20 @@ function test_large_example(; use_gpu=true, min_counts=[5, 8, 10, 15])
         # Use appropriate function based on backend
         if use_gpu
             result = obtain_enriched_configurations(test_dict; 
-                                                  motif_size=3, 
-                                                  config=config,
-                                                  filter_len=filter_len)
+                                                  motif_size=3,
+                                                  filter_len=filter_len,
+                                                  config=config)
         else
             result = obtain_enriched_configurations_cpu(test_dict; 
-                                                       motif_size=3, 
-                                                       config=config,
-                                                       filter_len=filter_len)
+                                                       motif_size=3,
+                                                       filter_len=filter_len,
+                                                       min_count=min_count,
+                                                       config=config)
         end
         
         println("Found $(nrow(result)) enriched motifs:")
         for (i, row) in enumerate(eachrow(result))
-            # Extract motif columns (m1, m2, m3)
+            # Extract motif columns (m1, m2, m3 for convolution - same as ordinary)
             motif = [row.m1, row.m2, row.m3]
             # Check both consecutive and subset counts
             subset_count = get(subset_counts, Set(motif), 0)
@@ -278,8 +299,8 @@ end
 """
 CPU-only version for CI/testing environments without GPU.
 """
-function test_large_example_cpu()
-    return test_large_example(use_gpu=false, min_counts=[8, 15])  # Fewer tests for CI
+function test_large_example_convolution_cpu()
+    return test_large_example_convolution(use_gpu=false, min_counts=[8, 15])  # Fewer tests for CI
 end
 
 # Run the test if this file is executed directly
@@ -287,8 +308,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # Check environment variable to determine which test to run
     use_gpu = get(ENV, "EPIC_HYPERSKETCH_GPU_TESTS", "false") == "true"
     if use_gpu
-        test_large_example()  # Full GPU test
+        test_large_example_convolution()  # Full GPU test
     else
-        test_large_example_cpu()  # CPU-only test
+        test_large_example_convolution_cpu()  # CPU-only test
     end
 end

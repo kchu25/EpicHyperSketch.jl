@@ -225,9 +225,11 @@ function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_
     if in_bounds
         K = size(combs, 1)
         contrib = FloatType(0)
+        last_comb_num = Int32(0)  # Track last combination number for data_index
         @inbounds for k = 1:K
             # Store filter ID
             comb_num = combs[k, j]
+            last_comb_num = comb_num  # Save for use after loop
             motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]
             # Store distance to next filter (if not last)
             if k < K
@@ -243,7 +245,7 @@ function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_
             end
             contrib += refArrayContrib[comb_num, n]
         end
-        data_index[i] = refArray[comb_num, DATA_PT_INDEX_COLUMN, n]
+        data_index[i] = refArray[last_comb_num, DATA_PT_INDEX_COLUMN, n]
         contribs[i] = contrib
     end
     return nothing
@@ -258,12 +260,14 @@ function obtain_motifs_ordinary!(CindsVec, combs, refArray, refArrayContrib, mot
     if in_bounds
         K = size(combs, 1)
         contrib = FloatType(0)
+        last_comb_num = Int32(0)  # Track last combination number for data_index
         @inbounds for k = 1:K
             comb_num = combs[k, j]
+            last_comb_num = comb_num  # Save for use after loop
             motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]
             contrib += refArrayContrib[comb_num, n]
         end
-        data_index[i] = refArray[comb_num, DATA_PT_INDEX_COLUMN, n]
+        data_index[i] = refArray[last_comb_num, DATA_PT_INDEX_COLUMN, n]
         contribs[i] = contrib
     end
     return nothing
