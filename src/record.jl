@@ -121,7 +121,7 @@ function constructVecRefArrays(
 
     sizes = fill(batch_size, num_batches - 1)
     last_batch_size > 0 && push!(sizes, last_batch_size)
-    vecRefArray = [zeros(IntType, (max_active_len, refArraysSecondDim[case], sz)) for sz in sizes]
+    vecRefArray = [zeros(IntType, (max_active_len, refArraysDim[case], sz)) for sz in sizes]
     # each vecRefArray[i] is a 3D array of size (max_active_len, 1 or 2, batch_size) 
 
     for (index, data_pt_index) in enumerate(keys(activation_dict))
@@ -130,10 +130,14 @@ function constructVecRefArrays(
 
         features = activation_dict[data_pt_index]        
         if case == :OrdinaryFeatures
-            vecRefArray[batch_index][1:length(features), 1, within_batch_index] .= convert.(IntType, features)
+            for (i, feat) in enumerate(features)
+                vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.feature)
+                vecRefArray[batch_index][i, CONTRIBUTION_COLUMN, within_batch_index] = convert(FloatType, feat.contribution)
+            end
         elseif case == :Convolution
             for (i, feat) in enumerate(features)
                 vecRefArray[batch_index][i, FILTER_INDEX_COLUMN, within_batch_index] = convert(IntType, feat.filter)
+                vecRefArray[batch_index][i, CONTRIBUTION_COLUMN, within_batch_index] = convert(FloatType, feat.contribution)
                 vecRefArray[batch_index][i, POSITION_COLUMN, within_batch_index] = convert(IntType, feat.position)
             end
         else
@@ -169,8 +173,8 @@ function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     maximum(length, values(dict))
 end
 
-const OrdinaryFeatureType = Int
-const ConvolutionFeatureType = NamedTuple{(:filter, :position), Tuple{Int, Int}}
+const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{Int, FloatType}}
+const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{Int, FloatType, Int}}
 
 function dict_case(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     if S == OrdinaryFeatureType

@@ -6,6 +6,7 @@ using Random
 #
 
 const IntType = Int32 # RTX 3090 has dedicated INT32 execution units in each SM 
+const FloatType = Float32
 # const PrimeNumber = IntType(50000101)  # A large prime number for hashing
 # Default error probability (delta) for Count-Min Sketch.
 const DEFAULT_CMS_DELTA = 0.0001  
@@ -18,12 +19,14 @@ const BATCH_SIZE = 500
 
 # Constants for refArray indexing (features/filters data)
 const FILTER_INDEX_COLUMN = 1  # Filter ID / Feature ID
-const POSITION_COLUMN = 2      # Position in sequence
+const CONTRIBUTION_COLUMN = 2  # Contribution score
+const POSITION_COLUMN = 3      # Position in sequence
+
 
 # Number of columns (2nd dimension) in refArray based on case
-const refArraysSecondDim = Dict(
-    :OrdinaryFeatures => 1,
-    :Convolution => 2
+const refArraysDim = Dict(
+    :OrdinaryFeatures => 2,
+    :Convolution => 3
 )
 
 include("types.jl")
