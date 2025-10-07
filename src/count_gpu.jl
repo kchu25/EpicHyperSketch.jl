@@ -219,22 +219,32 @@ end
 """
 Extract configurations for convolution case: filter IDs and inter-filter distances.
 """
-function obtain_motifs_conv!(CindsVec, combs, refArray, motifs_obtained, filter_len)
+function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_obtained, distances, data_index, positions, contribs, filter_len, offset)
     i, j, n, in_bounds = _config_kernel_setup(CindsVec)
     
     if in_bounds
         K = size(combs, 1)
+        contrib = FloatType(0)
         @inbounds for k = 1:K
             # Store filter ID
-            motifs_obtained[i, 2*(k-1)+1] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
-
+            comb_num = combs[k, j]
+            motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]
             # Store distance to next filter (if not last)
             if k < K
-                pos1 = refArray[combs[k, j], POSITION_COLUMN, n]
+                pos1 = refArray[comb_num, POSITION_COLUMN, n]
                 pos2 = refArray[combs[k+1, j], POSITION_COLUMN, n]
-                motifs_obtained[i, 2*k] = pos2 - pos1 - filter_len
+                distances[i, k] = pos2 - pos1 - filter_len
             end
+            # store the position of the start and the end of the motif
+            if k == 1
+                positions[i, 1] = refArray[comb_num, POSITION_COLUMN, n]
+            elseif k == K
+                positions[i, 2] = refArray[comb_num, POSITION_COLUMN, n] + filter_len - 1
+            end
+            contrib += refArrayContrib[comb_num, n]
         end
+        data_index[i] = n + offset
+        contribs[i] = contrib
     end
     return nothing
 end
@@ -242,14 +252,19 @@ end
 """
 Extract configurations for ordinary case: only filter/feature IDs.
 """
-function obtain_motifs_ordinary!(CindsVec, combs, refArray, motifs_obtained)
+function obtain_motifs_ordinary!(CindsVec, combs, refArray, refArrayContrib, motifs_obtained, data_index, contribs, offset)
     i, j, n, in_bounds = _config_kernel_setup(CindsVec)
     
     if in_bounds
         K = size(combs, 1)
+        contrib = FloatType(0)
         @inbounds for k = 1:K
-            motifs_obtained[i, k] = refArray[combs[k, j], FILTER_INDEX_COLUMN, n]
+            comb_num = combs[k, j]
+            motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]
+            contrib += refArrayContrib[comb_num, n]
         end
+        data_index[i] = n + offset
+        contribs[i] = contrib
     end
     return nothing
 end

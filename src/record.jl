@@ -40,7 +40,9 @@ mutable struct Record
         ) where {T <: Integer, S}
 
         # preprocess the activation_dict
-        filter_empty!(activation_dict)
+
+        # filter_empty!(activation_dict)
+
         sort_activation_dict!(activation_dict)
         # determine case and max_active_length
         case = dict_case(activation_dict)
@@ -79,11 +81,11 @@ end
 For `:OrdinaryFeatures`: Returns `motif_size` (one coefficient per feature position).
 For `:Convolution`: Returns `2 * motif_size - 1` (coefficients for both features and distances).
 """
-function actual_motif_size(r::Record)
-    r.case == :OrdinaryFeatures && return r.motif_size
-    r.case == :Convolution && return 2 * r.motif_size - 1
-    error("Unsupported case: $(r.case)")
-end
+# function actual_motif_size(r::Record)
+#     r.case == :OrdinaryFeatures && return r.motif_size
+#     r.case == :Convolution && return 2 * r.motif_size - 1
+#     error("Unsupported case: $(r.case)")
+# end
 
 
 get_cuda_count_tuple2d(r::Record, i::Integer) = (size(r.combs, 2), size(r.vecRefArray[i], 3))
@@ -206,8 +208,8 @@ end
     filter_empty!(dict)
 Filter out keys with empty values from the dictionary.
 """
-function filter_empty!(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
-     for k in keys(dict)
-        isempty(dict[k]) && delete!(dict, k)
-    end
-end
+# function filter_empty!(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
+#      for k in keys(dict)
+#         isempty(dict[k]) && delete!(dict, k)
+#     end
+# end

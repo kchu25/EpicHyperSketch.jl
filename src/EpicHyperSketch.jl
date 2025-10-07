@@ -73,23 +73,6 @@ function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketc
     end
 end
 
-# Helper function to dispatch config extraction kernel based on case
-function _launch_config_kernel!(r::Record, batch_idx::Int, where_exceeds, motifs_obtained, config::HyperSketchConfig)
-    threads = config.threads_1d
-    blocks = ceil(IntType, length(where_exceeds))
-    
-    if r.case == :OrdinaryFeatures
-        @cuda threads=threads blocks=blocks obtain_motifs_ordinary!(
-            where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained)
-    elseif r.case == :Convolution
-        @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
-        @cuda threads=threads blocks=blocks obtain_motifs_conv!(
-            where_exceeds, r.combs, r.vecRefArray[batch_idx], motifs_obtained, r.filter_len)
-    else
-        error("Unsupported case: $(r.case)")
-    end
-end
-
 function count!(r::Record, config::HyperSketchConfig)
     """Execute counting on the sketch for all batches."""
     @assert r.use_cuda "count! currently only supports use_cuda=true"
@@ -108,23 +91,90 @@ function make_selection!(r::Record, config::HyperSketchConfig)
     end
 end
 
+# Helper function to dispatch config extraction kernel based on case
+function _launch_config_kernels(r::Record, where_exceeds_vec, config::HyperSketchConfig)
+    threads = config.threads_1d
+
+    offset = IntType(0)
+
+    motifs_obtained_vec = 
+        [CUDA.zeros(IntType, (length(w), r.motif_size)) 
+            for w in where_exceeds_vec];
+    data_index_vec = [CUDA.zeros(IntType, length(w))
+            for w in where_exceeds_vec];
+    contributions_vec = 
+        [CUDA.zeros(FloatType, length(w)) 
+            for w in where_exceeds_vec];
+
+    if r.case == :OrdinaryFeatures
+        for batch_idx = 1:num_batches(r)
+            blocks = cld(length(where_exceeds_vec[batch_idx]), r.threads_1d)
+            @cuda threads=threads blocks=blocks obtain_motifs_ordinary!(
+                    where_exceeds_vec[batch_idx], r.combs, 
+                    r.vecRefArray[batch_idx], 
+                    r.vecRefArrayContrib[batch_idx],
+                    motifs_obtained_vec[batch_idx],
+                    data_index_vec[batch_idx],
+                    contributions_vec[batch_idx],                    
+                    offset                    
+                    )
+            offset += length(where_exceeds_vec[batch_idx])
+        end
+        return motifs_obtained_vec, data_index_vec, contributions_vec
+    elseif r.case == :Convolution
+        @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
+
+        distances_obtained_vec = 
+            [CUDA.zeros(IntType, (length(w), r.motif_size - 1)) 
+                for w in where_exceeds_vec];
+        positions_obtained_vec = 
+            [CUDA.zeros(IntType, (length(w), 2))  # for start and end positions
+                for w in where_exceeds_vec];
+
+        for batch_idx = 1:num_batches(r)
+            blocks = cld(length(where_exceeds_vec[batch_idx]), r.threads_1d)
+            @cuda threads=threads blocks=blocks obtain_motifs_conv!(
+                        where_exceeds_vec[batch_idx], r.combs, 
+                        r.vecRefArray[batch_idx], 
+                        r.vecRefArrayContrib[batch_idx],
+                        motifs_obtained_vec[batch_idx], 
+                        distances_obtained_vec[batch_idx],
+                        data_index_vec[batch_idx],
+                        positions_obtained_vec[batch_idx],
+                        contributions_vec[batch_idx],
+                        r.filter_len,
+                        offset
+                        )
+            offset += length(where_exceeds_vec[batch_idx])
+        end
+
+        
+
+        return motifs_obtained_vec, data_index_vec, distances_obtained_vec, positions_obtained_vec, contributions_vec        
+    else
+        error("Unsupported case: $(r.case)")
+    end
+end
+
 function _obtain_enriched_configurations_(r::Record, config::HyperSketchConfig)
     """Extract configurations where combinations exceed minimum count threshold."""
     @assert config.use_cuda "obtain_enriched_configurations currently only supports use_cuda=true"
     
     enriched_motifs = Vector{Set{Tuple}}(undef, num_batches(r))
-    
+    where_exceeds_vec = Vector{Vector{CartesianIndex{2}}}(undef, num_batches(r))
     for batch_idx = 1:num_batches(r)
         where_exceeds = findall(r.selectedCombs[batch_idx] .== true)
-        
-        if isempty(where_exceeds)
-            enriched_motifs[batch_idx] = Set{Vector{IntType}}()
-        else
-            motifs_obtained = CuMatrix{IntType}(undef, length(where_exceeds), actual_motif_size(r))
-            _launch_config_kernel!(r, batch_idx, where_exceeds, motifs_obtained, config)
-            enriched_motifs[batch_idx] = Set(map(Tuple, eachrow(Array(motifs_obtained))))
-        end
+        where_exceeds_vec[batch_idx] = where_exceeds
+        # if isempty(where_exceeds)
+        #     enriched_motifs[batch_idx] = Set{Vector{IntType}}()
+        # else
+        #     motifs_obtained = CuMatrix{IntType}(undef, length(where_exceeds), actual_motif_size(r))
+        #     _launch_config_kernel!(r, batch_idx, where_exceeds, motifs_obtained, config)
+        #     enriched_motifs[batch_idx] = Set(map(Tuple, eachrow(Array(motifs_obtained))))
+        # end
     end
+
+
 
     return reduce(union, enriched_motifs)
 end
