@@ -46,7 +46,7 @@ function calculate_conv_hash_cpu(combs, refArray, hashCoefficients, comb_col_ind
             position2 = refArray[next_comb_index_value, POSITION_COLUMN, n]
             distance = position2 - position1 - filter_len
             
-            if distance < 0  # overlapping filters
+            if distance < 0  # overlapping filters (should not happen with proper sorting)
                 return Int32(-1)  # signal invalid
             end
             
@@ -98,7 +98,7 @@ function count_conv_cpu!(r::Record, config::HyperSketchConfig)
                                                                  comb_col_ind, sketch_row_ind, n, 
                                                                  size(combs, 1), filter_len)
                         if sketch_col_index != -1
-                            final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+                            final_index = mod(mod(sketch_col_index, num_counters), num_cols_sketch) + 1
                             sketch[sketch_row_ind, final_index] += 1
                         end
                     end
@@ -134,7 +134,7 @@ function count_ordinary_cpu!(r::Record, config::HyperSketchConfig)
                         sketch_col_index = calculate_ordinary_hash_cpu(combs, refArray, hashCoefficients, 
                                                                      comb_col_ind, sketch_row_ind, n, 
                                                                      size(combs, 1))
-                        final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+                        final_index = mod(mod(sketch_col_index, num_counters), num_cols_sketch) + 1
                         sketch[sketch_row_ind, final_index] += 1
                     end
                 end
@@ -174,7 +174,7 @@ function make_selection_conv_cpu!(r::Record, config::HyperSketchConfig)
                                                              comb_col_ind, sketch_row_ind, n, 
                                                              size(combs, 1), filter_len)
                     if sketch_col_index != -1
-                        final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+                        final_index = mod(mod(sketch_col_index, num_counters), num_cols_sketch) + 1
                         if sketch[sketch_row_ind, final_index] ≥ min_count
                             selectedCombs[comb_col_ind, n] = true
                         end
@@ -214,7 +214,7 @@ function make_selection_ordinary_cpu!(r::Record, config::HyperSketchConfig)
                     sketch_col_index = calculate_ordinary_hash_cpu(combs, refArray, hashCoefficients, 
                                                                  comb_col_ind, sketch_row_ind, n, 
                                                                  size(combs, 1))
-                    final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+                    final_index = mod(mod(sketch_col_index, num_counters), num_cols_sketch) + 1
                     if sketch[sketch_row_ind, final_index] ≥ min_count
                         selectedCombs[comb_col_ind, n] = true
                     end

@@ -34,31 +34,40 @@ Calculate hash index for convolution method, including position distances.
 Returns -1 if filters overlap (invalid combination).
 """
 function calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, sketch_row_ind, n, num_rows_combs, filter_len)
-    sketch_col_index = IntType(0)
+    # Extract combination indices and check validity
     @inbounds for elem_idx in 1:num_rows_combs
         comb_index_value = combs[elem_idx, comb_col_ind]
-        # Guard against invalid comb index
         if comb_index_value == 0 || comb_index_value > size(refArray,1)
             return IntType(-1)
         end
-        filter_index = refArray[comb_index_value, FILTER_INDEX_COLUMN, n]
+    end
+    
+    # Check for overlaps in original order
+    @inbounds for i in 1:(num_rows_combs-1)
+        comb_idx1 = combs[i, comb_col_ind]
+        comb_idx2 = combs[i+1, comb_col_ind]
+        pos1 = refArray[comb_idx1, POSITION_COLUMN, n]
+        pos2 = refArray[comb_idx2, POSITION_COLUMN, n]
+        distance = pos2 - pos1 - filter_len
+        if distance < 0  # overlapping filters
+            return IntType(-1)  # signal invalid
+        end
+    end
+    
+    # Calculate hash using original order for both filters and distances
+    sketch_col_index = IntType(0)
+    @inbounds for elem_idx in 1:num_rows_combs
+        comb_idx = combs[elem_idx, comb_col_ind]
+        filter_index = refArray[comb_idx, FILTER_INDEX_COLUMN, n]
         hash_coeff = hashCoefficients[sketch_row_ind, 2*(elem_idx-1)+1]
         sketch_col_index += filter_index * hash_coeff
 
         if elem_idx < num_rows_combs
-            next_comb_index_value = combs[elem_idx+1, comb_col_ind]
-            # Guard against invalid next index
-            if next_comb_index_value == 0 || next_comb_index_value > size(refArray,1)
-                return IntType(-1)
-            end
-            position1 = refArray[comb_index_value, POSITION_COLUMN, n]
-            position2 = refArray[next_comb_index_value, POSITION_COLUMN, n]
+            next_comb_idx = combs[elem_idx+1, comb_col_ind]
+            position1 = refArray[comb_idx, POSITION_COLUMN, n]
+            position2 = refArray[next_comb_idx, POSITION_COLUMN, n]
             distance = position2 - position1 - filter_len
-
-            if distance < 0  # overlapping filters
-                return IntType(-1)  # signal invalid
-            end
-
+            
             sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * distance
         end
     end
@@ -119,7 +128,7 @@ end
 
 # Common sketch index calculation and update logic
 function _process_sketch_update!(sketch, sketch_row_ind, sketch_col_index, num_counters, num_cols_sketch)
-    final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+    final_index = mod(mod(sketch_col_index, num_counters), num_cols_sketch) + 1
     CUDA.@atomic sketch[sketch_row_ind, final_index] += 1
 end
 
@@ -132,7 +141,7 @@ function _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, c
     @inbounds for row = 1:num_hash_functions
         sketch_col_index = hash_func(combs, refArray, hashCoefficients, comb_col_ind, row, n)
         if sketch_col_index != -1  # valid hash (for conv case)
-            final_index = ((sketch_col_index % num_counters) % num_cols_sketch) + 1
+            final_index = mod(mod(sketch_col_index, num_counters), num_cols_sketch) + 1
             count = sketch[row, final_index]
             min_count = min(min_count, count)
         else
@@ -225,9 +234,9 @@ function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_
     if in_bounds
         K = size(combs, 1)
         contrib = FloatType(0)
+        
         last_comb_num = Int32(0)  # Track last combination number for data_index
         @inbounds for k = 1:K
-            # Store filter ID
             comb_num = combs[k, j]
             last_comb_num = comb_num  # Save for use after loop
             motifs_obtained[i, k] = refArray[comb_num, FILTER_INDEX_COLUMN, n]

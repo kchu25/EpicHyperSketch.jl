@@ -42,9 +42,9 @@ mutable struct Record
         # preprocess the activation_dict
 
         filter_empty!(activation_dict)
-        sort_activation_dict!(activation_dict)
         # determine case and max_active_length
         case = dict_case(activation_dict)
+        sort_activation_dict!(activation_dict, case=case)
         @info "Determined case: $case"
         max_active_len = get_max_active_len(activation_dict)
         @info "Max active length: $max_active_len"
