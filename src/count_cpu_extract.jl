@@ -47,7 +47,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
     # Collect results from all batches
     motifs_vec = Vector{Matrix{IntType}}()
     data_idx_vec = Vector{Vector{IntType}}()
-    contrib_vec = Vector{Vector{Float32}}()
+    contrib_vec = Vector{Vector{FloatType}}()
     distances_vec = r.case == :Convolution ? Vector{Matrix{IntType}}() : nothing
     positions_vec = r.case == :Convolution ? Vector{Matrix{IntType}}() : nothing
     
@@ -61,7 +61,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
                 # Allocate arrays for ordinary case
                 motifs = Matrix{IntType}(undef, n_configs, r.motif_size)
                 data_index = Vector{IntType}(undef, n_configs)
-                contribs = Vector{Float32}(undef, n_configs)
+                contribs = Vector{FloatType}(undef, n_configs)
                 
                 # Extract configurations
                 obtain_motifs_ordinary_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx],
@@ -81,7 +81,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
                 distances = Matrix{IntType}(undef, n_configs, r.motif_size - 1)
                 positions = Matrix{IntType}(undef, n_configs, 2)  # start, end
                 data_index = Vector{IntType}(undef, n_configs)
-                contribs = Vector{Float32}(undef, n_configs)
+                contribs = Vector{FloatType}(undef, n_configs)
                 
                 # Extract configurations
                 obtain_motifs_conv_cpu!(where_exceeds, r.combs, r.vecRefArray[batch_idx],
@@ -105,7 +105,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
             motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
             col_names = [motif_cols..., :data_index, :contribution]
             return DataFrame([name => IntType[] for name in motif_cols]..., 
-                           :data_index => IntType[], :contribution => Float32[])
+                           :data_index => IntType[], :contribution => FloatType[])
         else  # Convolution
             motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
             distance_cols = [Symbol("d$(i)$(i+1)") for i in 1:(r.motif_size-1)]
@@ -114,7 +114,7 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
             return DataFrame([name => IntType[] for name in motif_cols]...,
                            [name => IntType[] for name in distance_cols]...,
                            [name => IntType[] for name in position_cols]...,
-                           :data_index => IntType[], :contribution => Float32[])
+                           :data_index => IntType[], :contribution => FloatType[])
         end
     end
     

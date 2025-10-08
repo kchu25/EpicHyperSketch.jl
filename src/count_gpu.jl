@@ -19,7 +19,7 @@ end
 Calculate hash index for ordinary (non-convolution) counting method.
 """
 function calculate_ordinary_hash(combs, refArray, hashCoefficients, comb_col_ind, sketch_row_ind, n, num_rows_combs)
-    sketch_col_index = Int32(0)
+    sketch_col_index = IntType(0)
     @inbounds for elem_idx in 1:num_rows_combs
         comb_index_value = combs[elem_idx, comb_col_ind]
         filter_index = refArray[comb_index_value, FILTER_INDEX_COLUMN, n]  # Get filter/feature ID  # Get filter/feature ID
@@ -235,7 +235,7 @@ function obtain_motifs_conv!(CindsVec, combs, refArray, refArrayContrib, motifs_
         K = size(combs, 1)
         contrib = FloatType(0)
         
-        last_comb_num = Int32(0)  # Track last combination number for data_index
+        last_comb_num = IntType(0)  # Track last combination number for data_index
         @inbounds for k = 1:K
             comb_num = combs[k, j]
             last_comb_num = comb_num  # Save for use after loop
@@ -269,7 +269,7 @@ function obtain_motifs_ordinary!(CindsVec, combs, refArray, refArrayContrib, mot
     if in_bounds
         K = size(combs, 1)
         contrib = FloatType(0)
-        last_comb_num = Int32(0)  # Track last combination number for data_index
+        last_comb_num = IntType(0)  # Track last combination number for data_index
         @inbounds for k = 1:K
             comb_num = combs[k, j]
             last_comb_num = comb_num  # Save for use after loop
