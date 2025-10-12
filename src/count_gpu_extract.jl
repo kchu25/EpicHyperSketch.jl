@@ -38,7 +38,7 @@ function count!(r::Record, config::HyperSketchConfig)
     """Execute counting on the sketch for all batches."""
     @assert r.use_cuda "count! currently only supports use_cuda=true"
     
-    for batch_idx = 1:num_batches(r)
+    @showprogress for batch_idx = 1:num_batches(r)
         _launch_count_kernel!(r, batch_idx, config)
         CUDA.synchronize()
     end
@@ -46,7 +46,7 @@ end
 
 function make_selection!(r::Record, config::HyperSketchConfig)
     """Identify combinations that meet minimum count threshold."""
-    for batch_idx = 1:num_batches(r)
+    @showprogress for batch_idx = 1:num_batches(r)
         _launch_selection_kernel!(r, batch_idx, config)
         CUDA.synchronize()
     end

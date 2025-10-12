@@ -4,6 +4,7 @@ using CUDA
 using Combinatorics
 using Random
 using DataFrames
+using ProgressMeter
 #
 
 const IntType = Int32 # RTX 3090 has dedicated INT32 execution units in each SM 

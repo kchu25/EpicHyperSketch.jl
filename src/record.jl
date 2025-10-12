@@ -181,8 +181,8 @@ function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     maximum(length, values(dict))
 end
 
-const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{Int, Float32}}
-const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{Int, Float32, Int}}
+const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{IntType, FloatType}}
+const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{IntType, FloatType, IntType}}
 
 function dict_case(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     if S == OrdinaryFeatureType
