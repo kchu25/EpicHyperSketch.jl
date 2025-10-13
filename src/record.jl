@@ -86,6 +86,22 @@ mutable struct Record
             use_cuda
         )
     end
+    
+    # Inner constructor for manual construction (used in partitioning)
+    function Record(
+        vecRefArray::Vector{<:AbstractArray{IntType, 3}},
+        vecRefArrayContrib::Vector{<:AbstractArray{FloatType, 2}},
+        combs::AbstractArray{IntType, 2},
+        cms::CountMinSketch,
+        selectedCombs::Vector{<:AbstractArray{Bool, 2}},
+        case::Symbol,
+        motif_size::IntType,
+        filter_len::Union{IntType, Nothing},
+        use_cuda::Bool
+    )
+        new(vecRefArray, vecRefArrayContrib, combs, cms, selectedCombs, 
+            case, motif_size, filter_len, use_cuda)
+    end
 end
 
 """

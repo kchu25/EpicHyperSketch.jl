@@ -37,6 +37,7 @@ include("performance.jl")
 include("sketch.jl")
 include("memory.jl")
 include("record.jl")
+include("partition.jl")
 include("count_gpu.jl")
 include("count_gpu_extract.jl")
 include("count_cpu.jl")
@@ -47,9 +48,14 @@ include("count_cpu_extract.jl")
 
 export CountMinSketch, 
        Record,
+       PartitionedRecord,
        HyperSketchConfig,
        default_config,
        obtain_enriched_configurations,
+       obtain_enriched_configurations_partitioned,
+       create_partitioned_record,
+       partition_by_length,
+       print_partition_stats,
        # CPU versions
        obtain_enriched_configurations_cpu,
        count_cpu!,

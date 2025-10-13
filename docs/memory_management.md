@@ -330,3 +330,210 @@ print_memory_report(
     config::HyperSketchConfig
 )
 ```
+
+## Partitioned Processing for Memory Efficiency
+
+### Problem: Variable Sequence Lengths
+
+When your `activation_dict` contains sequences with highly variable lengths, processing all data in a single `Record` is inefficient:
+
+- **Batch size is constrained by longest sequences**: Even if most sequences are short, the batch size must be small enough to handle the longest ones.
+- **Wasted GPU memory**: Short sequences don't need as much memory, but they're processed with the same (small) batch size as long sequences.
+- **High peak memory usage**: All data structures exist in memory simultaneously.
+
+### Solution: Partition by Length
+
+The partitioned approach:
+1. **Splits** `activation_dict` into partitions based on sequence length ranges
+2. **Processes each partition sequentially** with its own optimal batch size
+3. **Shares a single CountMinSketch** across all partitions
+4. **Creates Records on-demand**, freeing memory between partitions
+
+### Basic Usage
+
+```julia
+using EpicHyperSketch
+
+# Your activation dictionary (with variable-length sequences)
+activation_dict = Dict(...)
+
+# Use partitioned processing with min_count=1 (recommended)
+motifs = obtain_enriched_configurations_partitioned(
+    activation_dict,
+    motif_size=3,
+    partition_width=10,      # Group by length ranges of 10
+    batch_size=:auto,        # Auto-configure per partition
+    min_count=1,             # Extract all motifs, filter afterwards
+    filter_len=8             # For convolution case
+)
+
+# Filter by count afterwards (recommended for partitioned processing)
+using DataFrames
+filtered_motifs = filter(row -> row.count >= 5, motifs)
+```
+
+**Important Note on `min_count`**: 
+
+When using partitioned processing, it's **recommended to use `min_count=1`** and filter the resulting DataFrame afterwards. This is because:
+
+1. Selection happens per-partition during `make_selection!`
+2. A motif appearing across multiple partitions might not meet `min_count` in any single partition
+3. But its total count across all partitions might exceed the threshold
+
+**Example of the issue:**
+```julia
+# Motif [1, 5, 10] appears:
+# - 3 times in partition 1 (length 10-20)
+# - 4 times in partition 2 (length 21-30)  
+# - Total: 7 times
+
+# If min_count=5 during processing:
+# - Partition 1: 3 < 5, not selected ✗
+# - Partition 2: 4 < 5, not selected ✗
+# - Result: Motif with 7 total occurrences is missed!
+
+# Better approach:
+motifs = obtain_enriched_configurations_partitioned(..., min_count=1)
+# Now the motif is extracted with its count
+filtered = filter(row -> row.count >= 5, motifs)  
+# Total count (7) >= 5, correctly included ✓
+```
+
+### How It Works
+
+```julia
+# 1. Partition by length
+partitions, ranges = partition_by_length(activation_dict, 10)
+# ranges might be: [5:14, 15:24, 25:34, 35:44, ...]
+
+# 2. Create PartitionedRecord (lightweight, stores partitions not Records)
+pr = create_partitioned_record(
+    activation_dict, 3;
+    partition_width=10,
+    batch_size=:auto,
+    use_cuda=true
+)
+
+# 3. Process sequentially (only one Record in memory at a time!)
+config = default_config(min_count=5)
+count!(pr, config)              # Processes partitions one by one
+make_selection!(pr, config)     # Processes partitions one by one
+motifs = obtain_enriched_configurations(pr, config)  # Extracts and combines
+```
+
+### Memory Efficiency
+
+**Key insight**: With partitioned processing, peak memory is the maximum of individual partitions, NOT the sum!
+
+```
+Non-partitioned:
+  Peak memory = Fixed + (all short sequences) + (all long sequences)
+  
+Partitioned:
+  Peak memory = Fixed + max(memory per partition)
+                      ≈ Fixed + (one partition's sequences)
+```
+
+### Example: Variable-Length Dataset
+
+```julia
+# Dataset with 3 groups of very different lengths:
+# - 100 sequences with 5-10 features
+# - 100 sequences with 25-35 features  
+# - 100 sequences with 50-60 features
+
+# Without partitioning:
+# - Batch size constrained by longest (60 features)
+# - All 300 sequences processed with small batches
+# - Peak memory: HIGH
+
+result_non_partitioned = auto_configure_batch_size(
+    activation_dict, 3, :OrdinaryFeatures;
+    use_cuda=true, verbose=true
+)
+# Might give: batch_size=50 (constrained by 60-feature sequences)
+
+# With partitioning (width=15):
+# - Partition 1 (5-19): batch_size could be 200 (short sequences)
+# - Partition 2 (20-34): batch_size could be 100 (medium sequences)
+# - Partition 3 (35-60): batch_size could be 40 (long sequences)
+# - Each processed separately, memory freed between
+# - Peak memory: LOW (only largest single partition)
+
+motifs = obtain_enriched_configurations_partitioned(
+    activation_dict,
+    motif_size=3,
+    partition_width=15,
+    batch_size=:auto
+)
+```
+
+### Configuration Options
+
+```julia
+create_partitioned_record(
+    activation_dict,
+    motif_size;
+    partition_width=10,           # Length range for each partition
+    batch_size=:auto,             # Auto-configure per partition
+    use_cuda=true,
+    filter_len=nothing,           # For convolution case
+    seed=nothing,                 # Random seed for sketch
+    auto_batch_verbose=false      # Print batch size details
+)
+```
+
+### When to Use Partitioned Processing
+
+**Use partitioned processing when:**
+- Sequence lengths vary significantly (e.g., std(lengths) > 10)
+- You have limited GPU memory
+- You want optimal batch sizes for different length groups
+- Dataset is too large for single-Record approach
+
+**Skip partitioning when:**
+- All sequences have similar lengths
+- Dataset easily fits in memory
+- You want simplest possible workflow
+
+### Advanced: Manual Partition Control
+
+```julia
+# Create partitions manually
+partitions, ranges = partition_by_length(activation_dict, 20)
+
+println("Created $(length(partitions)) partitions:")
+for (i, (partition, range)) in enumerate(zip(partitions, ranges))
+    println("  Partition $i: length $range, $(length(partition)) sequences")
+end
+
+# Create PartitionedRecord with specific settings
+pr = create_partitioned_record(
+    activation_dict, 3;
+    partition_width=20,
+    batch_size=100,  # Fixed batch size for all partitions
+    use_cuda=true
+)
+
+# View partition statistics
+print_partition_stats(pr)
+```
+
+### Under the Hood
+
+The `PartitionedRecord` struct stores:
+- `partitions`: Vector of activation_dict subsets (lightweight)
+- `shared_cms`: Single CountMinSketch shared across all partitions
+- `partition_ranges`: Length ranges for each partition
+- Configuration: motif_size, case, batch_size, etc.
+
+When `count!`, `make_selection!`, or `obtain_enriched_configurations` is called:
+1. Loop through partitions sequentially
+2. For each partition, call `_create_record_for_partition()`
+   - Creates Record with optimal batch size
+   - Uses shared CountMinSketch
+3. Process the Record (count, select, or extract)
+4. Record goes out of scope and is garbage collected
+5. Move to next partition
+
+This ensures **only one Record exists in memory at any time**.
