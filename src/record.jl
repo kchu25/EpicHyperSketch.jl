@@ -195,17 +195,21 @@ function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     maximum(length, values(dict))
 end
 
-const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{Int, FloatType}}
-const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{Int, FloatType, Int}}
-
 function dict_case(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
-    println("Element type in dictionary values: $S")
-    if S == OrdinaryFeature
-        return :OrdinaryFeatureType
-    elseif S == ConvolutionFeatureType
-        return :Convolution
+    # Check if S is a NamedTuple type by examining field names
+    # This is more robust than exact type matching since NamedTuple types
+    # can have different concrete integer types (Int64 vs Int32, etc.)
+    if S <: NamedTuple
+        fnames = fieldnames(S)
+        if fnames == (:feature, :contribution)
+            return :OrdinaryFeatures
+        elseif fnames == (:filter, :contribution, :position)
+            return :Convolution
+        else
+            error("Unsupported NamedTuple fields in dictionary values: $fnames")
+        end
     else
-        error("Unsupported element type in dictionary values")
+        error("Unsupported element type in dictionary values: $S (expected NamedTuple)")
     end
 end
 
