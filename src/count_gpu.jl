@@ -156,7 +156,7 @@ CUDA kernel for convolution-based candidate selection with position-aware hashin
 Computes minimum across all hash functions for proper Count-Min Sketch behavior.
 """
 function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients, 
-        sketch, selectedCombs, min_count, filter_len)
+        sketch, selectedComb, min_count, filter_len)
     comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     n = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     
@@ -177,7 +177,7 @@ function count_kernel_conv_get_candidates(combs, refArray, hashCoefficients,
             #  @cuprintf("cms_count=%d, min_count=%d\n", cms_count, min_count)
             #  @cuprintf("min_count=%d\n", min_count)
             #  @cuprintf(cms_count)
-            selectedCombs[comb_col_ind, n] = true
+            selectedComb[comb_col_ind, n] = true
         end
     end
     return nothing
@@ -187,7 +187,7 @@ end
 CUDA kernel for ordinary candidate selection without position constraints.
 Computes minimum across all hash functions for proper Count-Min Sketch behavior.
 """
-function count_kernel_ordinary_get_candidate(combs, refArray, hashCoefficients, sketch, selectedCombs, min_count)
+function count_kernel_ordinary_get_candidate(combs, refArray, hashCoefficients, sketch, selectedComb, min_count)
     comb_col_ind = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     n = (blockIdx().y - 1) * blockDim().y + threadIdx().y
     
@@ -205,7 +205,7 @@ function count_kernel_ordinary_get_candidate(combs, refArray, hashCoefficients, 
         cms_count = _compute_cms_minimum_count(combs, refArray, hashCoefficients, sketch, 
                                               comb_col_ind, n, num_counters, num_cols_sketch, hash_func)
         if cms_count ≥ min_count
-            selectedCombs[comb_col_ind, n] = true
+            selectedComb[comb_col_ind, n] = true
         end
     end
     return nothing
@@ -299,9 +299,11 @@ combs: (num_motif_elements x num_combinations) matrix
     - Rows: motif_size (ordinary) or ⌈motif_size/2⌉ (convolution)
     - Columns: total number of filter/feature combinations
 
-selectedCombs: (num_combinations x min(batch_size, num_sequences)) boolean matrix
+selectedComb: (num_combinations x min(batch_size, num_sequences)) boolean matrix
     - Rows: total number of filter/feature combinations
     - Columns: batch size (number of sequences in current batch)
+
+selectedCombs: Vector of selectedComb; each selectedComb accounts for a batch
 
 Parameters:
     - motif_size: number of filters/features per motif
