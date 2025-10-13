@@ -7,8 +7,8 @@ const HashMatrix = AbstractMatrix{IntType}
 const SketchMatrix = AbstractMatrix{IntType}
 
 # Feature types
-const OrdinaryFeature = NamedTuple{(:feature, :contribution), Tuple{IntType, FloatType}}
-const ConvolutionFeature = NamedTuple{(:filter, :contribution, :position), Tuple{IntType, FloatType, IntType}}
+const OrdinaryFeature = NamedTuple{(:feature, :contribution), Tuple{Integer, FloatType}}
+const ConvolutionFeature = NamedTuple{(:filter, :contribution, :position), Tuple{Integer, FloatType, Integer}}
 # TODO: Int can be UInt; can use less space
 
 make_conv_feature(filter::Integer, contribution::Real, position::Integer) = 

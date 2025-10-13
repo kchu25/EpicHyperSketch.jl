@@ -54,7 +54,7 @@ const RUN_GPU_TESTS = get(ENV, "EPIC_HYPERSKETCH_GPU_TESTS", "false") == "true"
         E = EpicHyperSketch
 
         """
-        for :Convolution case, need to test the non-zero portion of 
+        for :ConvolutionFeature case, need to test the non-zero portion of 
             vecRefArray[i][:, POSITION_COLUMN, n] is sorted in ascending order for all i, n
                 i is the batch index, 
                 n is the within-batch index

@@ -35,6 +35,7 @@ include("errors.jl")
 include("config.jl")
 include("performance.jl")
 include("sketch.jl")
+include("memory.jl")
 include("record.jl")
 include("count_gpu.jl")
 include("count_gpu_extract.jl")
@@ -53,6 +54,12 @@ export CountMinSketch,
        obtain_enriched_configurations_cpu,
        count_cpu!,
        make_selection_cpu!,
+       # Memory management
+       calculate_optimal_batch_size,
+       auto_configure_batch_size,
+       print_memory_report,
+       estimate_memory_per_batch,
+       estimate_fixed_memory,
        # Errors
        HyperSketchError,
        InvalidConfigurationError,

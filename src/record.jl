@@ -33,10 +33,11 @@ mutable struct Record
 
     function Record(activation_dict::Dict{T, Vector{S}}, 
         motif_size::Integer;
-        batch_size=BATCH_SIZE,
+        batch_size::Union{Integer, Symbol}=BATCH_SIZE,
         use_cuda::Bool=true,
         filter_len::Union{Integer, Nothing}=nothing,
-        seed::Union{Int, Nothing}=nothing
+        seed::Union{Int, Nothing}=nothing,
+        auto_batch_verbose::Bool=false
         ) where {T <: Integer, S}
 
         # preprocess the activation_dict
@@ -48,6 +49,19 @@ mutable struct Record
         @info "Determined case: $case"
         max_active_len = get_max_active_len(activation_dict)
         @info "Max active length: $max_active_len"
+        
+        # Auto-calculate batch size if requested
+        if batch_size == :auto
+            result = auto_configure_batch_size(activation_dict, motif_size, case; 
+                                              use_cuda=use_cuda, verbose=auto_batch_verbose)
+            batch_size = result.batch_size
+            @info "Auto-configured batch_size: $batch_size ($(result.num_batches) batches, ~$(round(result.estimated_peak_memory_gb, digits=2)) GB estimated)"
+        elseif batch_size isa Integer
+            @info "Using specified batch_size: $batch_size"
+        else
+            error("batch_size must be an Integer or :auto")
+        end
+        
         @info "Generating combinations and constructing reference arrays..."
         # generate combinations
         combs = generate_combinations(motif_size, max_active_len; use_cuda=use_cuda)
@@ -181,12 +195,13 @@ function get_max_active_len(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
     maximum(length, values(dict))
 end
 
-const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{IntType, FloatType}}
-const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{IntType, FloatType, IntType}}
+const OrdinaryFeatureType = NamedTuple{(:feature, :contribution), Tuple{Int, FloatType}}
+const ConvolutionFeatureType = NamedTuple{(:filter, :contribution, :position), Tuple{Int, FloatType, Int}}
 
 function dict_case(dict::Dict{T, Vector{S}}) where {T <: Integer, S}
-    if S == OrdinaryFeatureType
-        return :OrdinaryFeatures
+    println("Element type in dictionary values: $S")
+    if S == OrdinaryFeature
+        return :OrdinaryFeatureType
     elseif S == ConvolutionFeatureType
         return :Convolution
     else
