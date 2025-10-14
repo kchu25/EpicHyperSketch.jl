@@ -103,18 +103,18 @@ function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConf
     if isempty(motifs_vec)
         if r.case == :OrdinaryFeatures
             motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
-            col_names = [motif_cols..., :data_index, :contribution]
+            # col_names = [motif_cols..., :data_pt_index, :contribution]
             return DataFrame([name => IntType[] for name in motif_cols]..., 
-                           :data_index => IntType[], :contribution => FloatType[])
+                           :data_pt_index => IntType[], :contribution => FloatType[])
         else  # Convolution
             motif_cols = [Symbol("m$i") for i in 1:r.motif_size]
             distance_cols = [Symbol("d$(i)$(i+1)") for i in 1:(r.motif_size-1)]
             position_cols = [:start, :end]
-            col_names = [motif_cols..., distance_cols..., position_cols..., :data_index, :contribution]
+            # col_names = [motif_cols..., distance_cols..., position_cols..., :data_pt_index, :contribution]
             return DataFrame([name => IntType[] for name in motif_cols]...,
                            [name => IntType[] for name in distance_cols]...,
                            [name => IntType[] for name in position_cols]...,
-                           :data_index => IntType[], :contribution => FloatType[])
+                           :data_pt_index => IntType[], :contribution => FloatType[])
         end
     end
     

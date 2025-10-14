@@ -125,7 +125,7 @@ end
 # Helper to create DataFrame for ordinary features
 function _create_ordinary_dataframe(motifs, data_index, contribs, motif_size)
     motif_cols = [Symbol("m$i") for i in 1:motif_size]
-    col_names = [motif_cols..., :data_index, :contribution]
+    col_names = [motif_cols..., :data_pt_index, :contribution]
     
     df_data = hcat(Array(motifs), Array(data_index), Array(contribs))
     return DataFrame(df_data, col_names)
@@ -136,7 +136,7 @@ function _create_convolution_dataframe(motifs, distances, positions, data_index,
     motif_cols = [Symbol("m$i") for i in 1:motif_size]
     distance_cols = [Symbol("d$(i)$(i+1)") for i in 1:(motif_size-1)]
     position_cols = [:start, :end]
-    col_names = [motif_cols..., distance_cols..., position_cols..., :data_index, :contribution]
+    col_names = [motif_cols..., distance_cols..., position_cols..., :data_pt_index, :contribution]
     
     df_data = hcat(Array(motifs), Array(distances), Array(positions), Array(data_index), Array(contribs))
     return DataFrame(df_data, col_names)
