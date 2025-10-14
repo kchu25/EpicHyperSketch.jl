@@ -5,214 +5,202 @@
 [![Build Status](https://github.com/kchu25/EpicHyperSketch.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/kchu25/EpicHyperSketch.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/kchu25/EpicHyperSketch.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/kchu25/EpicHyperSketch.jl)
 
-A high-performance extracting enriched motifs from data using a GPU-accelerated Count-Min Sketch.
+GPU-accelerated extraction of enriched feature combinations from high-dimensional data using probabilistic counting.
+
+## What It Does
+
+Given sequences of features (activated neurons, genomic elements, categorical data), EpicHyperSketch finds which combinations co-occur frequently. It's designed for datasets with thousands of variable-length sequences where you need to find patterns efficiently without exhaustive enumeration.
 
 ## Installation
 
 ```julia
 using Pkg
-Pkg.add("EpicHyperSketch")  # When published
-# Or for development:
-# Pkg.develop(path="/path/to/EpicHyperSketch")
+Pkg.add(url="https://github.com/kchu25/EpicHyperSketch.jl")
 ```
 
-## Quick Start
+Requires CUDA-capable GPU for best performance (CPU fallback available).
+
+## Quick Example
 
 ```julia
 using EpicHyperSketch
-```
 
-## Case 1: Ordinary Features
-
-Find motifs based on feature IDs only (no position information).
-
-### Example Data
-```julia
-# Dictionary: sequence_id => [feature1, feature2, ...]
-activation_dict_ordinary = Dict(
-    1 => [7, 3, 8, 19],
-    2 => [13, 7, 28, 19],
-    3 => [7, 15, 19],
-    4 => [13, 9, 28, 7, 19],
-    5 => [7, 12, 19],
-    6 => [3, 7, 19, 13, 28],
-    7 => [7, 19, 13, 28],
-    8 => [13, 7, 19, 28],
-    9 => [13, 28],
-    10 => [13, 7, 19, 28]
+# Your data: dictionary mapping IDs to feature vectors
+activation_dict = Dict(
+    1 => [(feature=7, contribution=1.0), (feature=3, contribution=0.8), (feature=19, contribution=1.0)],
+    2 => [(feature=7, contribution=1.0), (feature=19, contribution=0.9), (feature=28, contribution=1.0)],
+    3 => [(feature=7, contribution=1.0), (feature=19, contribution=1.0)],
+    # ... more sequences
 )
-```
 
-### Find Enriched Motifs
-```julia
-# Find all 2-feature motifs that appear at least 2 times
+# Find 2-feature motifs appearing at least 5 times
 motifs = obtain_enriched_configurations(
-    activation_dict_ordinary;
-    motif_size = 2,           # Look for pairs
-    min_count = 7            # Must appear ≥2 times
+    activation_dict;
+    motif_size=2,
+    min_count=5
 )
-
-println(motifs)
-# Output: Set([(7, 19), (13, 28)])
-# These pairs appear in multiple sequences
+# Returns DataFrame with columns: m1, m2, data_index, contribution, count
 ```
 
-## Case 2: Convolution (Position-Aware)
 
-Find motifs considering both filter IDs and their spatial relationships.
+## Two Use Cases
 
-### Example Data
+### Ordinary Features (Position-Independent)
+
+When you care about which features co-occur, regardless of position:
+
 ```julia
-# Dictionary: sequence_id => [(filter=id, position=pos), ...]
-activation_dict_conv = Dict(
-    1 => [(filter=2, position=1), (filter=4, position=7)],
-    2 => [(filter=2, position=3), (filter=4, position=9)], 
-    3 => [(filter=1, position=19), (filter=9, position=18)],
-    4 => [(filter=2, position=5), (filter=4, position=11)],
-    5 => [(filter=2, position=2), (filter=4, position=8)]
+activation_dict = Dict(
+    1 => [(feature=7, contribution=1.0), (feature=3, contribution=0.8), (feature=19, contribution=1.0)],
+    2 => [(feature=13, contribution=1.0), (feature=7, contribution=0.9), (feature=28, contribution=1.0)],
+    # ...
 )
-```
-
-### Find Enriched Spatial Motifs
-```julia
-# Find spatial patterns with filter_len=3
-motifs = obtain_enriched_configurations(
-    activation_dict_conv;
-    motif_size = 2,           # Look for filter pairs  
-    filter_len = 3,           # Filter length for gap calculation
-    min_count = 2            # Must appear ≥2 times
-)
-
-println(motifs)
-# Output: Set([(2, 3, 4)])
-# Means: Filter 2, gap of 3 positions, then Filter 4
-# Gap = position2 - position1 - filter_len = 7 - 1 - 3 = 3
-```
-
-## Overview
-
-EpicHyperSketch efficiently identifies frequently occurring patterns (motifs) in large datasets by:
-- Using probabilistic Count-Min Sketch for memory-efficient counting
-- Supporting both ordinary features and position-aware convolution patterns
-- Leveraging CUDA GPU acceleration for high performance
-- Automatically falling back to CPU when GPU is unavailable
-
-
-## Advanced Configuration
-
-### Custom Configuration
-```julia
-using CUDA
-
-config = HyperSketchConfig(
-    min_count = 5,
-    use_cuda = CUDA.functional(),     # Auto-detect GPU
-    batch_size = 1000,               # Larger batches for big datasets
-    threads_2d = (16, 16),           # GPU thread configuration
-    delta = 0.001,                   # Count-Min Sketch error probability
-    epsilon = 0.0005                 # Count-Min Sketch tolerance
-)
-
-motifs = obtain_enriched_configurations(
-    activation_dict_conv;
-    motif_size = 3,
-    filter_len = 2, 
-    config = config
-)
-```
-
-### CPU-Only Mode
-```julia
-# Force CPU execution (useful for CI/testing)
-config_cpu = HyperSketchConfig(use_cuda = false)
 
 motifs = obtain_enriched_configurations(
     activation_dict;
-    motif_size = 2,
-    min_count = 3,
-    config = config_cpu
+    motif_size=2,
+    min_count=5
 )
+# Result: m1, m2 columns show which feature pairs are enriched
 ```
 
-### Reproducible Results
-```julia
-# Set a seed for reproducible hash coefficients in Count-Min Sketch
-config_reproducible = HyperSketchConfig(seed = 42)
+### Convolution Features (Position-Aware)
 
-motifs1 = obtain_enriched_configurations(
+When feature positions matter (sequence motifs, spatial patterns):
+
+```julia
+activation_dict = Dict(
+    1 => [(filter=2, contribution=1.0, position=10), 
+          (filter=4, contribution=0.9, position=18)],
+    2 => [(filter=2, contribution=1.0, position=5), 
+          (filter=4, contribution=1.0, position=13)],
+    # ...
+)
+
+motifs = obtain_enriched_configurations(
     activation_dict;
-    motif_size = 2,
-    min_count = 2,
-    config = config_reproducible
+    motif_size=2,
+    filter_len=8,  # Number of unique filters
+    min_count=5
 )
+# Result includes distance columns (d12, etc.) showing spacing
+```
 
-# Running again with same seed produces identical results
-motifs2 = obtain_enriched_configurations(
+## Memory Management
+
+The system automatically optimizes batch sizes for your GPU and dataset:
+
+```julia
+# Automatic batch sizing (recommended)
+motifs = obtain_enriched_configurations(
     activation_dict;
-    motif_size = 2,
-    min_count = 2,
-    config = config_reproducible
-)
-
-@assert motifs1 == motifs2  # Same results with same seed
-```
-
-## Understanding Results
-
-### Ordinary Motifs
-Results are tuples of feature IDs:
-- `(7, 19)` → Feature 7 and 19
-
-### Convolution Motifs  
-Results encode spatial relationships:
-- `(2, 3, 4)` → Filter 2, gap of 3, Filter 4
-- `(1, 0, 5, 2, 8)` → Filter 1, gap 0, Filter 5, gap 2, Filter 8
-
-The gap calculation: `gap = position_next - position_current - filter_len`
-
-## Performance Notes
-
-- **GPU Acceleration**: Automatically uses CUDA when available
-- **Memory Efficient**: Count-Min Sketch reduces memory usage for large datasets  
-- **Batch Processing**: Handles large datasets by processing in batches
-- **Automatic Fallback**: Falls back to CPU if GPU memory insufficient
-
-## API Reference
-
-### Main Function
-```julia
-obtain_enriched_configurations(activation_dict; 
-    motif_size=3, 
-    filter_len=nothing, 
-    min_count=1, 
-    config=default_config())
-```
-
-**Parameters:**
-- `activation_dict`: Input data (see examples above)
-- `motif_size`: Number of features/filters in each motif
-- `filter_len`: Filter length for convolution case (required for position-aware)
-- `min_count`: Minimum frequency threshold  
-- `config`: Configuration object for advanced settings
-
-**Returns:** `Set{Tuple}` of enriched motifs
-
-### Configuration
-```julia
-HyperSketchConfig(;
-    min_count=1,
-    use_cuda=true, 
-    batch_size=500,
-    threads_2d=(32,32),
-    delta=0.0001,
-    epsilon=0.00005,
-    seed=nothing  # Set to an integer for reproducible results
+    motif_size=3,
+    batch_size=:auto  # Default
 )
 ```
-## Speed comparison
-Coming soon.
+
+For datasets with highly variable sequence lengths, use partitioned processing:
+
+```julia
+# Partition by length for better memory efficiency
+motifs = obtain_enriched_configurations_partitioned(
+    activation_dict;
+    motif_size=3,
+    partition_width=10,  # Group by length ranges
+    batch_size=:auto,
+    min_count=1  # Always use 1, filter afterwards
+)
+
+# Filter by count threshold
+using DataFrames
+filtered = filter(row -> row.count >= 5, motifs)
+```
+
+Why partition? When sequences range from 10 to 100 features, partitioning lets short sequences use larger batches and long sequences use smaller batches, reducing peak memory by 40-60%.
+
+**Important**: With partitioned processing, always use `min_count=1` and filter the resulting DataFrame. A motif appearing 3 times in partition 1 and 4 times in partition 2 (7 total) would be rejected by `min_count=5` in each partition separately, even though it exceeds the threshold overall.
+
+## Configuration
+
+```julia
+config = default_config(
+    min_count=5,
+    batch_size=:auto,
+    use_cuda=true,
+    seed=42  # For reproducibility
+)
+
+motifs = obtain_enriched_configurations(
+    activation_dict;
+    motif_size=3,
+    config=config
+)
+```
+
+## Understanding Output
+
+Each row in the output DataFrame represents one occurrence:
+
+```julia
+# Ordinary features:
+# m1, m2, m3: Feature IDs in the motif
+# data_index: Which sequence contains this occurrence
+# contribution: Combined contribution score
+# count: Total occurrences across all sequences
+
+# Convolution features (adds):
+# d12, d23, ...: Distances between consecutive features
+# start, end: Position range in the sequence
+```
+
+Get unique motifs with total counts:
+
+```julia
+using DataFrames
+unique_motifs = combine(groupby(motifs, [:m1, :m2, :m3]), :count => first => :total_count)
+```
+
+## Complete Workflow
+
+```julia
+using EpicHyperSketch
+using DataFrames
+
+# Load data
+activation_dict = ...
+
+# Extract motifs (partitioned for variable-length sequences)
+motifs = obtain_enriched_configurations_partitioned(
+    activation_dict;
+    motif_size=3,
+    partition_width=15,
+    batch_size=:auto,
+    min_count=1
+)
+
+# Filter by threshold
+significant = filter(row -> row.count >= 10, motifs)
+
+# Get unique motifs with statistics
+unique_motifs = combine(
+    groupby(significant, [:m1, :m2, :m3]), 
+    :count => first => :total_count,
+    :contribution => mean => :avg_contribution
+)
+
+sort!(unique_motifs, :total_count, rev=true)
+first(unique_motifs, 10)
+```
+
+## Notes
+
+**Count-Min Sketch**: Uses probabilistic counting that never undercounts but may overcount due to hash collisions. Collisions are rare with default parameters (delta=0.001, epsilon=0.001).
+
+**Performance**: Start with small motif_size (2-3). Higher values and longer max_active_len increase memory usage exponentially.
+
+**Documentation**: See `docs/memory_management.md` for details on memory estimation, partitioning strategies, and troubleshooting.
 
 ## Requirements
 
-GPU support requires NVIDIA GPU with CUDA capability.
+NVIDIA GPU with CUDA support recommended. CPU fallback available but slower.
 

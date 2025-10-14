@@ -1,152 +1,38 @@
-# Memory Management and Automatic Batch Size Selection
+# Memory Management Guide
 
-## Overview
+EpicHyperSketch automatically manages memory by calculating optimal batch sizes based on your data and available resources.
 
-EpicHyperSketch now includes intelligent memory management that automatically calculates optimal batch sizes based on:
-- Available GPU/CPU memory
-- Dataset characteristics (total sequences, max active length)
-- Motif size and feature type (Ordinary vs Convolution)
-- Count-Min Sketch parameters (delta, epsilon)
+## Quick Start
 
-## Why This Matters
-
-The memory consumption of EpicHyperSketch depends on several factors:
-
-1. **Fixed structures** (shared across all batches):
-   - Combinations matrix: `C(max_active_len, motif_size)` combinations
-   - Count-Min Sketch: `rows × cols` matrix (depends on delta, epsilon)
-   - Hash coefficients
-
-2. **Per-batch structures** (scales with batch_size):
-   - vecRefArray: stores feature/filter data for each sequence
-   - vecRefArrayContrib: stores contribution values
-   - selectedCombs: stores which combinations exceed min_count
-
-**Key insight**: As `max_active_len` increases, the combinations matrix grows exponentially (C(n,k)), which means less memory is available for batches. The optimal `batch_size` should decrease to compensate.
-
-## Basic Usage
-
-### Option 1: Automatic Batch Size (Recommended)
-
-Simply use `:auto` for batch_size:
+Just use `:auto` for batch size:
 
 ```julia
 using EpicHyperSketch
 
-# Your activation dictionary
-activation_dict = Dict(...)
-
-# Use automatic batch size selection
-config = default_config(
-    min_count=5,
-    batch_size=:auto,  # ← Let the system choose
-    use_cuda=true
-)
-
 motifs = obtain_enriched_configurations(
     activation_dict;
     motif_size=3,
-    filter_len=8,
-    config=config
+    batch_size=:auto,  # Let the system decide (default)
+    min_count=5
 )
 ```
 
-### Option 2: Get Batch Size Recommendation
+The system figures out the best batch size for your GPU/CPU memory and dataset characteristics.
 
-Get a recommendation with detailed memory analysis:
+## Why It Matters
 
-```julia
-result = auto_configure_batch_size(
-    activation_dict,
-    3,  # motif_size
-    :Convolution;
-    use_cuda=true,
-    verbose=true  # Print detailed report
-)
+Memory usage has two components:
 
-println("Recommended batch_size: ", result.batch_size)
-println("Number of batches: ", result.num_batches)
-println("Peak memory estimate: ", result.estimated_peak_memory_gb, " GB")
-```
+**Fixed structures** (same regardless of batch size):
+- Combinations matrix: C(max_active_len, motif_size) - grows exponentially
+- Count-Min Sketch: Depends on delta, epsilon parameters
 
-Output:
-```
-============================================================
-Auto-configured batch size
-============================================================
-Dataset characteristics:
-  Total data points: 750
-  Max active length: 8
-  Motif size: 3
-  Case: Convolution
+**Per-batch structures** (scales with batch_size):
+- Feature arrays for each sequence in the batch
+- Contribution values
+- Selection masks
 
-Memory analysis:
-  Fixed memory (sketch, combs, etc.): 2.07 MB
-  Memory per data point: 0.17 KB
-  Memory per batch: 2.16 MB
-
-Recommended configuration:
-  Batch size: 750
-  Number of batches: 1
-  Estimated peak memory: 0.002 GB
-============================================================
-```
-
-### Option 3: Manual Calculation with Memory Budget
-
-Calculate batch size for a specific memory budget:
-
-```julia
-batch_size = calculate_optimal_batch_size(
-    1000,  # total sequences
-    50,    # max_active_len
-    3,     # motif_size
-    :Convolution;
-    target_memory_gb=4.0,  # Use 4GB
-    use_cuda=true
-)
-
-println("Optimal batch_size for 4GB: ", batch_size)
-```
-
-## Advanced Usage
-
-### Memory Report for Existing Configuration
-
-Get a detailed breakdown of memory usage:
-
-```julia
-config = default_config(min_count=5, batch_size=500)
-
-print_memory_report(
-    activation_dict,
-    3,  # motif_size
-    :Convolution,
-    config
-)
-```
-
-Output:
-```
-======================================================================
-                    MEMORY USAGE REPORT
-======================================================================
-
-Configuration:
-  Dataset size: 750 sequences
-  Max active length: 12
-  Motif size: 3
-  Case: Convolution
-  Batch size: 500
-  Number of batches: 2
-  Backend: GPU (CUDA)
-
-Memory breakdown:
-  Fixed structures:
-    - Combinations matrix: 1.03 MB
-    - Count-Min Sketch (10×54366): 2.07 MB
-    - Hash coefficients: 0.23 KB
-    - Total fixed: 3.11 MB
+When `max_active_len` is large, the combinations matrix takes more memory, leaving less room for batches. The system handles this automatically by reducing batch size as needed.
 
   Per-batch structures (batch_size=500):
     - vecRefArray: 0.07 MB
