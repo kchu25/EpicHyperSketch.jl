@@ -1,7 +1,7 @@
 name = "EpicHyperSketch"
 uuid = "c73a71ba-f77a-4450-b81e-a1166e41307d"
 authors = ["Shane Kuei-Hsien Chu (skchu@wustl.edu)"]
-version = "1.0.0-DEV"
+version = "0.0.1"
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
