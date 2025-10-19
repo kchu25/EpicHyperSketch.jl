@@ -136,7 +136,6 @@ motifs = obtain_enriched_configurations(
     config=config
 )
 ```
-
 ## Understanding Output
 
 Each row in the output DataFrame represents one occurrence:
