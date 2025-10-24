@@ -13,7 +13,7 @@ ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 
 [compat]
 julia = "1"
-CUDA = "5.9"
+CUDA = "5.8.5 - 5.9"
 Combinatorics = "1.0"
 DataFrames = "1.8"
 IterTools = "1.10"
