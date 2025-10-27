@@ -1,7 +1,7 @@
 name = "EpicHyperSketch"
 uuid = "c73a71ba-f77a-4450-b81e-a1166e41307d"
 authors = ["Shane Kuei-Hsien Chu (skchu@wustl.edu)"]
-version = "0.0.1"
+version = "0.0.2"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
