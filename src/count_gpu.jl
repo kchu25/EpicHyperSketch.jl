@@ -48,7 +48,9 @@ function calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, sk
         comb_idx2 = combs[i+1, comb_col_ind]
         pos1 = refArray[comb_idx1, POSITION_COLUMN, n]
         pos2 = refArray[comb_idx2, POSITION_COLUMN, n]
-        distance = pos2 - pos1 - filter_len
+        # distance = pos2 - pos1 - filter_len
+        distance = pos2 - pos1 
+        # change now to assume filter_len is 0, so take any combination into account
         if distance < 0  # overlapping filters
             return IntType(-1)  # signal invalid
         end
@@ -66,7 +68,8 @@ function calculate_conv_hash(combs, refArray, hashCoefficients, comb_col_ind, sk
             next_comb_idx = combs[elem_idx+1, comb_col_ind]
             position1 = refArray[comb_idx, POSITION_COLUMN, n]
             position2 = refArray[next_comb_idx, POSITION_COLUMN, n]
-            distance = position2 - position1 - filter_len
+            # distance = position2 - position1 - filter_len
+            distance = position2 - position1 # see above reasoning
             
             sketch_col_index += hashCoefficients[sketch_row_ind, 2*elem_idx] * distance
         end
