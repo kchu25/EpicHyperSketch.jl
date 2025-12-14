@@ -124,10 +124,11 @@ function create_partitioned_record(
     use_cuda::Bool=true,
     filter_len::Union{Integer, Nothing}=nothing,
     seed::Union{Int, Nothing}=nothing,
-    auto_batch_verbose::Bool=false
+    auto_batch_verbose::Bool=false,
+    verbose::Bool=false
 ) where {T <: Integer, S}
     
-    @info "Partitioning activation_dict by value lengths (width=$partition_width)..."
+    verbose && @info "Partitioning activation_dict by value lengths (width=$partition_width)..."
     
     # Partition the dictionary
     partitions, ranges = partition_by_length(activation_dict, partition_width)
@@ -136,7 +137,7 @@ function create_partitioned_record(
         error("Cannot create PartitionedRecord from empty activation_dict")
     end
     
-    @info "Created $(length(partitions)) partitions: $ranges"
+    verbose && @info "Created $(length(partitions)) partitions: $ranges"
     
     # Determine case
     filter_empty!(activation_dict)
@@ -144,7 +145,7 @@ function create_partitioned_record(
     
     # Create a shared CountMinSketch
     shared_cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda, seed=seed)
-    @info "Created shared CountMinSketch"
+    verbose && @info "Created shared CountMinSketch"
     
     return PartitionedRecord(
         partitions,
@@ -167,7 +168,8 @@ Internal helper to create a Record for a single partition.
 function _create_record_for_partition(
     partition::Dict,
     pr::PartitionedRecord,
-    partition_idx::Int
+    partition_idx::Int,
+    verbose::Bool=false
 )
     # Preprocess partition
     filter_empty!(partition)
@@ -182,9 +184,9 @@ function _create_record_for_partition(
             use_cuda=pr.use_cuda, verbose=pr.auto_batch_verbose
         )
         actual_batch_size = result.batch_size
-        @info "  Auto-configured batch_size: $actual_batch_size ($(result.num_batches) batches, ~$(round(result.estimated_peak_memory_gb, digits=2)) GB estimated)"
+        verbose && @info "  Auto-configured batch_size: $actual_batch_size ($(result.num_batches) batches, ~$(round(result.estimated_peak_memory_gb, digits=2)) GB estimated)"
     else
-        @info "  Using batch_size: $actual_batch_size"
+        verbose && @info "  Using batch_size: $actual_batch_size"
     end
     
     # Generate combinations and reference arrays
@@ -231,6 +233,7 @@ to the next partition, ensuring memory efficiency and correctness.
 - `min_count`: Minimum count threshold (default: 1, recommended for partitioned processing)
 - `seed`: Random seed for reproducibility
 - `config`: HyperSketchConfig object (optional)
+- `verbose`: Whether to print detailed progress information (default: false)
 - Other arguments passed to partition creation
 
 # Returns
@@ -257,6 +260,7 @@ function obtain_enriched_configurations_partitioned(
     seed::Union{Integer, Nothing}=1,
     batch_size::Union{Integer, Symbol}=:auto,
     auto_batch_verbose::Bool=false,
+    verbose::Bool=false,
     config::Union{HyperSketchConfig, Nothing}=nothing
 )
     # Create config if not provided
@@ -289,47 +293,48 @@ function obtain_enriched_configurations_partitioned(
     check_cuda_requirements(config.use_cuda)
     
     # Create partitioned record
-    @info "Creating partitioned record..."
-    pr = create_partitioned_record(
+    verbose && @info "Creating partitioned record..."
+    pr = create_partitioned_record(        
         activation_dict, motif_size;
         partition_width=partition_width,
         batch_size=batch_size,
         use_cuda=config.use_cuda,
         filter_len=filter_len,
         seed=config.seed,
-        auto_batch_verbose=auto_batch_verbose
+        auto_batch_verbose=auto_batch_verbose,
+        verbose=verbose
     )
     
     # Execute pipeline - CRITICAL: Process each partition completely before moving to next
     # This ensures selectedCombs state is preserved within each Record
-    @info "Processing partitions sequentially (count → select → extract per partition)..."
+    verbose && @info "Processing partitions sequentially (count → select → extract per partition)..."
     
     dfs = Vector{DataFrame}(undef, length(pr.partitions))
     
     for (i, (partition, range)) in enumerate(zip(pr.partitions, pr.partition_ranges))
-        @info "Processing partition $i/$(length(pr.partitions)) (length range: $range, $(length(partition)) data points)"
+        verbose && @info "Processing partition $i/$(length(pr.partitions)) (length range: $range, $(length(partition)) data points)"
         
         # Create Record for this partition
-        record = _create_record_for_partition(partition, pr, i)
+        record = _create_record_for_partition(partition, pr, i, verbose)
         
         # Count, select, and extract in sequence (same Record!)
-        @info "  Counting..."
+        verbose && @info "  Counting..."
         count!(record, config)
         
-        @info "  Selecting..."
+        verbose && @info "  Selecting..."
         make_selection!(record, config)
         
-        @info "  Extracting..."
+        verbose && @info "  Extracting..."
         dfs[i] = _obtain_enriched_configurations_(record, config)
         
-        @info "  Extracted $(nrow(dfs[i])) configurations, freeing memory"
+        verbose && @info "  Extracted $(nrow(dfs[i])) configurations, freeing memory"
     end
     
     # Combine all DataFrames
-    @info "Combining results from all partitions..."
+    verbose && @info "Combining results from all partitions..."
     motifs = vcat(dfs...)
     
-    @info "Extracted $(nrow(motifs)) enriched configurations total"
+    verbose && @info "Extracted $(nrow(motifs)) enriched configurations total"
     
     return motifs
 end
