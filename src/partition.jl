@@ -60,32 +60,32 @@ function partition_by_length(
         return Dict{T, Vector{S}}[], UnitRange{Int}[]
     end
     
-    # Find the range of lengths
-    lengths = [length(v) for v in values(activation_dict)]
-    min_len = minimum(lengths)
-    max_len = maximum(lengths)
+    # Find the range of lengths — single pass
+    min_len = typemax(Int)
+    max_len = typemin(Int)
+    @inbounds for v in values(activation_dict)
+        l = length(v)
+        min_len = min(min_len, l)
+        max_len = max(max_len, l)
+    end
     
     # Create partition ranges
-    ranges = UnitRange{Int}[]
-    current = min_len
-    while current <= max_len
-        range_end = min(current + partition_width - 1, max_len)
-        push!(ranges, current:range_end)
-        current = range_end + 1
+    num_partitions = cld(max_len - min_len + 1, partition_width)
+    ranges = Vector{UnitRange{Int}}(undef, num_partitions)
+    @inbounds for i in 1:num_partitions
+        lo = min_len + (i - 1) * partition_width
+        hi = min(lo + partition_width - 1, max_len)
+        ranges[i] = lo:hi
     end
     
     # Create partition dictionaries
-    partitions = [Dict{T, Vector{S}}() for _ in ranges]
+    partitions = [Dict{T, Vector{S}}() for _ in 1:num_partitions]
     
-    for (key, val) in activation_dict
-        len = length(val)
-        # Find which partition this belongs to
-        for (i, range) in enumerate(ranges)
-            if len in range
-                partitions[i][key] = val
-                break
-            end
-        end
+    # Direct index computation: O(1) per key instead of O(num_partitions)
+    @inbounds for (key, val) in activation_dict
+        idx = cld(length(val) - min_len + 1, partition_width)
+        idx = clamp(idx, 1, num_partitions)
+        partitions[idx][key] = val
     end
     
     # Filter out empty partitions
@@ -130,7 +130,12 @@ function create_partitioned_record(
     
     verbose && @info "Partitioning activation_dict by value lengths (width=$partition_width)..."
     
-    # Partition the dictionary
+    # Pre-process once: filter empties and determine case before partitioning
+    filter_empty!(activation_dict)
+    case = dict_case(activation_dict)
+    sort_activation_dict!(activation_dict, case=case)
+    
+    # Partition the (already cleaned & sorted) dictionary
     partitions, ranges = partition_by_length(activation_dict, partition_width)
     
     if isempty(partitions)
@@ -138,10 +143,6 @@ function create_partitioned_record(
     end
     
     verbose && @info "Created $(length(partitions)) partitions: $ranges"
-    
-    # Determine case
-    filter_empty!(activation_dict)
-    case = dict_case(activation_dict)
     
     # Create a shared CountMinSketch
     shared_cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda, seed=seed)
@@ -171,9 +172,7 @@ function _create_record_for_partition(
     partition_idx::Int,
     verbose::Bool=false
 )
-    # Preprocess partition
-    filter_empty!(partition)
-    sort_activation_dict!(partition, case=pr.case)
+    # Note: partition is already filtered and sorted by create_partitioned_record
     max_active_len = get_max_active_len(partition)
     
     # Calculate batch size for this partition
@@ -309,9 +308,12 @@ function obtain_enriched_configurations_partitioned(
     # This ensures selectedCombs state is preserved within each Record
     verbose && @info "Processing partitions sequentially (count → select → extract per partition)..."
     
-    dfs = Vector{DataFrame}(undef, length(pr.partitions))
+    dfs = DataFrame[]
+    sizehint!(dfs, length(pr.partitions))
     
     for (i, (partition, range)) in enumerate(zip(pr.partitions, pr.partition_ranges))
+        isempty(partition) && continue
+        
         verbose && @info "Processing partition $i/$(length(pr.partitions)) (length range: $range, $(length(partition)) data points)"
         
         # Create Record for this partition
@@ -325,14 +327,16 @@ function obtain_enriched_configurations_partitioned(
         make_selection!(record, config)
         
         verbose && @info "  Extracting..."
-        dfs[i] = _obtain_enriched_configurations_(record, config)
+        df = _obtain_enriched_configurations_(record, config)
         
-        verbose && @info "  Extracted $(nrow(dfs[i])) configurations, freeing memory"
+        verbose && @info "  Extracted $(nrow(df)) configurations, freeing memory"
+        
+        nrow(df) > 0 && push!(dfs, df)
     end
     
     # Combine all DataFrames
     verbose && @info "Combining results from all partitions..."
-    motifs = vcat(dfs...)
+    motifs = isempty(dfs) ? DataFrame() : reduce(vcat, dfs)
     
     verbose && @info "Extracted $(nrow(motifs)) enriched configurations total"
     
