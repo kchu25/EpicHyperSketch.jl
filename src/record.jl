@@ -37,7 +37,8 @@ mutable struct Record
         use_cuda::Bool=true,
         filter_len::Union{Integer, Nothing}=nothing,
         seed::Union{Int, Nothing}=nothing,
-        auto_batch_verbose::Bool=false
+        auto_batch_verbose::Bool=false,
+        verbose::Bool=false
         ) where {T <: Integer, S}
 
         # preprocess the activation_dict
@@ -46,28 +47,28 @@ mutable struct Record
         # determine case and max_active_length
         case = dict_case(activation_dict)
         sort_activation_dict!(activation_dict, case=case)
-        @info "Determined case: $case"
+        verbose && @info "Determined case: $case"
         max_active_len = get_max_active_len(activation_dict)
-        @info "Max active length: $max_active_len"
-        
+        verbose && @info "Max active length: $max_active_len"
+
         # Auto-calculate batch size if requested
         if batch_size == :auto
-            result = auto_configure_batch_size(activation_dict, motif_size, case; 
+            result = auto_configure_batch_size(activation_dict, motif_size, case;
                                               use_cuda=use_cuda, verbose=auto_batch_verbose)
             batch_size = result.batch_size
-            @info "Auto-configured batch_size: $batch_size ($(result.num_batches) batches, ~$(round(result.estimated_peak_memory_gb, digits=2)) GB estimated)"
+            verbose && @info "Auto-configured batch_size: $batch_size ($(result.num_batches) batches, ~$(round(result.estimated_peak_memory_gb, digits=2)) GB estimated)"
         elseif batch_size isa Integer
-            @info "Using specified batch_size: $batch_size"
+            verbose && @info "Using specified batch_size: $batch_size"
         else
             error("batch_size must be an Integer or :auto")
         end
-        
-        @info "Generating combinations and constructing reference arrays..."
+
+        verbose && @info "Generating combinations and constructing reference arrays..."
         # generate combinations
         combs = generate_combinations(motif_size, max_active_len; use_cuda=use_cuda)
-        vecRefArray, vecRefArrayContrib = constructVecRefArrays(activation_dict, max_active_len; 
+        vecRefArray, vecRefArrayContrib = constructVecRefArrays(activation_dict, max_active_len;
             batch_size=batch_size, case=case, use_cuda=use_cuda)
-        @info "Generating sketch..."
+        verbose && @info "Generating sketch..."
         cms = CountMinSketch(motif_size; case=case, use_cuda=use_cuda, seed=seed)
 
         selectedCombs = use_cuda ?

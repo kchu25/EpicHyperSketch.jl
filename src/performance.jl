@@ -1,6 +1,24 @@
 # Performance optimization utilities
 
 """
+    format_duration(seconds)
+
+Format an elapsed time (in seconds) into a compact human-readable string,
+e.g. `"850.0 ms"`, `"12.34 s"`, or `"2 min 3.4 s"`.
+"""
+function format_duration(seconds::Real)
+    if seconds < 1
+        return string(round(seconds * 1000, digits=1), " ms")
+    elseif seconds < 60
+        return string(round(seconds, digits=2), " s")
+    else
+        mins = floor(Int, seconds / 60)
+        secs = seconds - 60 * mins
+        return string(mins, " min ", round(secs, digits=1), " s")
+    end
+end
+
+"""
 Macro for timing GPU operations with proper synchronization.
 """
 macro gpu_time(expr)

@@ -34,19 +34,19 @@ function _launch_selection_kernel!(r::Record, batch_idx::Int, config::HyperSketc
     end
 end
 
-function count!(r::Record, config::HyperSketchConfig)
+function count!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
     """Execute counting on the sketch for all batches."""
     @assert r.use_cuda "count! currently only supports use_cuda=true"
-    
-    @showprogress for batch_idx = 1:num_batches(r)
+
+    @showprogress enabled=verbose for batch_idx = 1:num_batches(r)
         _launch_count_kernel!(r, batch_idx, config)
         CUDA.synchronize()
     end
 end
 
-function make_selection!(r::Record, config::HyperSketchConfig)
+function make_selection!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
     """Identify combinations that meet minimum count threshold."""
-    @showprogress for batch_idx = 1:num_batches(r)
+    @showprogress enabled=verbose for batch_idx = 1:num_batches(r)
         _launch_selection_kernel!(r, batch_idx, config)
         CUDA.synchronize()
     end
@@ -204,28 +204,31 @@ function obtain_enriched_configurations(
     activation_dict::ActivationDict;
     motif_size::Integer=3,
     filter_len::Union{Integer,Nothing}=nothing,
-    min_count::Integer=1, 
+    min_count::Integer=1,
     seed::Union{Integer, Nothing}=1,
+    verbose::Bool=false,
     config::HyperSketchConfig=default_config(min_count=min_count, seed=seed)
 )
     # Validation
     validate_activation_dict(activation_dict)
     validate_motif_size(motif_size)
     check_cuda_requirements(config.use_cuda)
-    
-    # Create record with configuration
-    @info "Constructing Record..."
-    r = Record(activation_dict, motif_size; 
-               batch_size=config.batch_size,
-               use_cuda=config.use_cuda, 
-               filter_len=filter_len,
-               seed=config.seed)
 
-    @info "Starting to count..."
+    t_start = time()
+    # Create record with configuration
+    verbose && @info "Constructing Record..."
+    r = Record(activation_dict, motif_size;
+               batch_size=config.batch_size,
+               use_cuda=config.use_cuda,
+               filter_len=filter_len,
+               seed=config.seed,
+               verbose=verbose)
+
+    verbose && @info "Starting to count..."
     # Execute pipeline
-    count!(r, config)
-    @info "Counting completed. Starting selection..."
-    make_selection!(r, config)
+    count!(r, config; verbose=verbose)
+    verbose && @info "Counting completed. Starting selection..."
+    make_selection!(r, config; verbose=verbose)
 
     # Debug selection results
     # @info "Selection results for first batch:"
@@ -242,5 +245,6 @@ function obtain_enriched_configurations(
 
     motifs = _obtain_enriched_configurations_(r, config)
 
+    @info "Enriched configurations obtained in $(format_duration(time() - t_start)) ($(nrow(motifs)) configurations)"
     return motifs
 end

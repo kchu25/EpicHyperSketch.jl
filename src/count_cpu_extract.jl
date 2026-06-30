@@ -41,8 +41,8 @@ end
 CPU version: Extract configurations where combinations exceed minimum count threshold.
 Returns a DataFrame with the same structure as the GPU version.
 """
-function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConfig)
-    @info "Running CPU configuration extraction..."
+function _obtain_enriched_configurations_cpu_(r::Record, config::HyperSketchConfig; verbose::Bool=false)
+    verbose && @info "Running CPU configuration extraction..."
     
     # Collect results from all batches
     motifs_vec = Vector{Matrix{IntType}}()
@@ -144,15 +144,16 @@ function obtain_enriched_configurations_cpu(
     activation_dict::ActivationDict;
     motif_size::Integer=3,
     filter_len::Union{Integer,Nothing}=nothing,
-    min_count::Integer=1, 
+    min_count::Integer=1,
     seed::Union{Integer, Nothing}=1,
+    verbose::Bool=false,
     config::HyperSketchConfig=default_config(min_count=min_count,
         use_cuda=false, seed=seed)
 )
     # Validation
     validate_activation_dict(activation_dict)
     validate_motif_size(motif_size)
-    
+
     # Override CUDA setting for CPU version
     config = HyperSketchConfig(
         delta=config.delta,
@@ -165,20 +166,24 @@ function obtain_enriched_configurations_cpu(
         threads_3d=config.threads_3d,
         seed=config.seed  # Preserve seed for reproducibility
     )
-    
-    @info "Constructing Record (CPU mode)..."
-    r = Record(activation_dict, motif_size; 
+
+    t_start = time()
+    verbose && @info "Constructing Record (CPU mode)..."
+    r = Record(activation_dict, motif_size;
                batch_size=config.batch_size,
                use_cuda=false,  # Force CPU arrays
                filter_len=filter_len,
-               seed=config.seed)
+               seed=config.seed,
+               verbose=verbose)
 
-    @info "Starting CPU counting..."
-    count_cpu!(r, config)
-    
-    @info "CPU counting completed. Starting selection..."
-    make_selection_cpu!(r, config)
-    
-    @info "Selection completed. Extracting configurations..."
-    return _obtain_enriched_configurations_cpu_(r, config)
+    verbose && @info "Starting CPU counting..."
+    count_cpu!(r, config; verbose=verbose)
+
+    verbose && @info "CPU counting completed. Starting selection..."
+    make_selection_cpu!(r, config; verbose=verbose)
+
+    verbose && @info "Selection completed. Extracting configurations..."
+    motifs = _obtain_enriched_configurations_cpu_(r, config; verbose=verbose)
+    @info "Enriched configurations obtained in $(format_duration(time() - t_start)) ($(nrow(motifs)) configurations)"
+    return motifs
 end

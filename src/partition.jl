@@ -307,39 +307,40 @@ function obtain_enriched_configurations_partitioned(
     # Execute pipeline - CRITICAL: Process each partition completely before moving to next
     # This ensures selectedCombs state is preserved within each Record
     verbose && @info "Processing partitions sequentially (count → select → extract per partition)..."
-    
+
+    t_start = time()
     dfs = DataFrame[]
     sizehint!(dfs, length(pr.partitions))
-    
+
     for (i, (partition, range)) in enumerate(zip(pr.partitions, pr.partition_ranges))
         isempty(partition) && continue
-        
+
         verbose && @info "Processing partition $i/$(length(pr.partitions)) (length range: $range, $(length(partition)) data points)"
-        
+
         # Create Record for this partition
         record = _create_record_for_partition(partition, pr, i, verbose)
-        
+
         # Count, select, and extract in sequence (same Record!)
         verbose && @info "  Counting..."
-        count!(record, config)
-        
+        count!(record, config; verbose=verbose)
+
         verbose && @info "  Selecting..."
-        make_selection!(record, config)
-        
+        make_selection!(record, config; verbose=verbose)
+
         verbose && @info "  Extracting..."
         df = _obtain_enriched_configurations_(record, config)
-        
+
         verbose && @info "  Extracted $(nrow(df)) configurations, freeing memory"
-        
+
         nrow(df) > 0 && push!(dfs, df)
     end
-    
+
     # Combine all DataFrames
     verbose && @info "Combining results from all partitions..."
     motifs = isempty(dfs) ? DataFrame() : reduce(vcat, dfs)
-    
-    verbose && @info "Extracted $(nrow(motifs)) enriched configurations total"
-    
+
+    @info "Enriched configurations obtained in $(format_duration(time() - t_start)) ($(nrow(motifs)) configurations, $(length(pr.partitions)) partitions)"
+
     return motifs
 end
 

@@ -73,8 +73,8 @@ end
 """
 CPU version: Execute counting on the sketch for convolution case.
 """
-function count_conv_cpu!(r::Record, config::HyperSketchConfig)
-    @info "Running CPU counting for convolution case..."
+function count_conv_cpu!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
+    verbose && @info "Running CPU counting for convolution case..."
     
     for batch_idx = 1:num_batches(r)
         refArray = r.vecRefArray[batch_idx]
@@ -111,8 +111,8 @@ end
 """
 CPU version: Execute counting on the sketch for ordinary case.
 """
-function count_ordinary_cpu!(r::Record, config::HyperSketchConfig)
-    @info "Running CPU counting for ordinary case..."
+function count_ordinary_cpu!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
+    verbose && @info "Running CPU counting for ordinary case..."
     
     for batch_idx = 1:num_batches(r)
         refArray = r.vecRefArray[batch_idx]
@@ -146,8 +146,8 @@ end
 """
 CPU version: Identify combinations that meet minimum count threshold for convolution case.
 """
-function make_selection_conv_cpu!(r::Record, config::HyperSketchConfig)
-    @info "Running CPU selection for convolution case..."
+function make_selection_conv_cpu!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
+    verbose && @info "Running CPU selection for convolution case..."
     
     for batch_idx = 1:num_batches(r)
         refArray = r.vecRefArray[batch_idx]
@@ -188,8 +188,8 @@ end
 """
 CPU version: Identify combinations that meet minimum count threshold for ordinary case.
 """
-function make_selection_ordinary_cpu!(r::Record, config::HyperSketchConfig)
-    @info "Running CPU selection for ordinary case..."
+function make_selection_ordinary_cpu!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
+    verbose && @info "Running CPU selection for ordinary case..."
     
     for batch_idx = 1:num_batches(r)
         refArray = r.vecRefArray[batch_idx]
@@ -295,12 +295,12 @@ end
 """
 CPU version: Main counting function dispatcher.
 """
-function count_cpu!(r::Record, config::HyperSketchConfig)
+function count_cpu!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
     if r.case == :OrdinaryFeatures
-        count_ordinary_cpu!(r, config)
+        count_ordinary_cpu!(r, config; verbose=verbose)
     elseif r.case == :Convolution
         @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
-        count_conv_cpu!(r, config)
+        count_conv_cpu!(r, config; verbose=verbose)
     else
         error("Unsupported case: $(r.case)")
     end
@@ -309,12 +309,12 @@ end
 """
 CPU version: Main selection function dispatcher.
 """
-function make_selection_cpu!(r::Record, config::HyperSketchConfig)
+function make_selection_cpu!(r::Record, config::HyperSketchConfig; verbose::Bool=false)
     if r.case == :OrdinaryFeatures
-        make_selection_ordinary_cpu!(r, config)
+        make_selection_ordinary_cpu!(r, config; verbose=verbose)
     elseif r.case == :Convolution
         @assert r.filter_len !== nothing "Convolution case requires a numeric `filter_len` (got `nothing`)."
-        make_selection_conv_cpu!(r, config)
+        make_selection_conv_cpu!(r, config; verbose=verbose)
     else
         error("Unsupported case: $(r.case)")
     end
